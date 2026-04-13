@@ -1,0 +1,70 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/PeekDesktop/PeekDesktop.csproj
+
+      - name: Build
+        run: dotnet build src/PeekDesktop/PeekDesktop.csproj -c Release --no-restore
+
+      - name: Publish single-file exe
+        run: >
+          dotnet publish src/PeekDesktop/PeekDesktop.csproj
+          -c Release
+          -r ${{ matrix.runtime }}
+          --self-contained
+          -p:PublishSingleFile=true
+          -o publish/${{ matrix.runtime }}
+
+      - name: Rename artifact
+        shell: bash
+        run: |
+          SUFFIX="${{ matrix.runtime }}"
+          SUFFIX="${SUFFIX#win-}"
+          mv "publish/${{ matrix.runtime }}/PeekDesktop.exe" "publish/${{ matrix.runtime }}/PeekDesktop-${SUFFIX}.exe"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PeekDesktop-${{ matrix.runtime }}
+          path: publish/${{ matrix.runtime }}/PeekDesktop-*.exe
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/PeekDesktop-win-x64/PeekDesktop-x64.exe
+            artifacts/PeekDesktop-win-arm64/PeekDesktop-arm64.exe
