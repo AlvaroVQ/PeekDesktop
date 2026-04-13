@@ -1,70 +1,156 @@
-name: Build and Release
+name: Build Release
 
 on:
   push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        runtime: [win-x64, win-arm64]
+
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore src/PeekDesktop/PeekDesktop.csproj
+    - name: Restore dependencies
+      run: dotnet restore src/PeekDesktop/PeekDesktop.csproj
 
-      - name: Build
-        run: dotnet build src/PeekDesktop/PeekDesktop.csproj -c Release --no-restore
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v4
+      with:
+        versionSpec: '6.4.x'
 
-      - name: Publish single-file exe
-        run: >
-          dotnet publish src/PeekDesktop/PeekDesktop.csproj
-          -c Release
-          -r ${{ matrix.runtime }}
+    - name: GitVersion
+      uses: gittools/actions/gitversion/execute@v4
+      id: gitversion
+
+    - name: Set version environment variables
+      shell: pwsh
+      run: |
+        $version = '${{ steps.gitversion.outputs.semVer }}'
+        $fullVersion = '${{ steps.gitversion.outputs.fullSemVer }}'
+        $assemblyVersion = "${{ steps.gitversion.outputs.major }}.${{ steps.gitversion.outputs.minor }}.${{ steps.gitversion.outputs.patch }}.0"
+
+        Write-Host "Using semantic version: $version"
+        Write-Host "Using full version: $fullVersion"
+        Write-Host "Using assembly version: $assemblyVersion"
+
+        echo "VERSION=$version" >> $env:GITHUB_ENV
+        echo "FULLVERSION=$fullVersion" >> $env:GITHUB_ENV
+        echo "ASSEMBLY_VERSION=$assemblyVersion" >> $env:GITHUB_ENV
+
+    - name: Build x64
+      run: |
+        dotnet publish src/PeekDesktop/PeekDesktop.csproj `
+          -c Release `
+          -r win-x64 `
+          /p:PublishSingleFile=true `
+          /p:DebugType=None `
+          /p:DebugSymbols=false `
+          /p:Version=$env:VERSION `
+          /p:AssemblyVersion=$env:ASSEMBLY_VERSION `
+          /p:FileVersion=$env:ASSEMBLY_VERSION `
+          /p:AssemblyInformationalVersion=$env:FULLVERSION `
           --self-contained
-          -p:PublishSingleFile=true
-          -o publish/${{ matrix.runtime }}
 
-      - name: Rename artifact
-        shell: bash
-        run: |
-          SUFFIX="${{ matrix.runtime }}"
-          SUFFIX="${SUFFIX#win-}"
-          mv "publish/${{ matrix.runtime }}/PeekDesktop.exe" "publish/${{ matrix.runtime }}/PeekDesktop-${SUFFIX}.exe"
+    - name: Build ARM64
+      run: |
+        dotnet publish src/PeekDesktop/PeekDesktop.csproj `
+          -c Release `
+          -r win-arm64 `
+          /p:PublishSingleFile=true `
+          /p:DebugType=None `
+          /p:DebugSymbols=false `
+          /p:Version=$env:VERSION `
+          /p:AssemblyVersion=$env:ASSEMBLY_VERSION `
+          /p:FileVersion=$env:ASSEMBLY_VERSION `
+          /p:AssemblyInformationalVersion=$env:FULLVERSION `
+          --self-contained
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PeekDesktop-${{ matrix.runtime }}
-          path: publish/${{ matrix.runtime }}/PeekDesktop-*.exe
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
-  release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+    - name: Sign executables with Trusted Signing
+      uses: azure/trusted-signing-action@v1
+      with:
+        azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        endpoint: https://wus2.codesigning.azure.net/
+        signing-account-name: hanselman
+        certificate-profile-name: PeekDesktop
+        files-folder: ${{ github.workspace }}\src\PeekDesktop\bin\Release\net8.0-windows
+        files-folder-filter: exe
+        files-folder-recurse: true
+        file-digest: SHA256
+        timestamp-rfc3161: http://timestamp.acs.microsoft.com
+        timestamp-digest: SHA256
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            artifacts/PeekDesktop-win-x64/PeekDesktop-x64.exe
-            artifacts/PeekDesktop-win-arm64/PeekDesktop-arm64.exe
+    - name: Prepare artifacts
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Path artifacts -Force
+        $version = $env:VERSION
+
+        New-Item -ItemType Directory -Path "temp-x64" -Force
+        Copy-Item "src/PeekDesktop/bin/Release/net8.0-windows/win-x64/publish/PeekDesktop.exe" -Destination "temp-x64/"
+        Copy-Item "README.md" -Destination "temp-x64/"
+        Compress-Archive -Path "temp-x64/*" -DestinationPath "artifacts/PeekDesktop-v$version-win-x64.zip"
+
+        New-Item -ItemType Directory -Path "temp-arm64" -Force
+        Copy-Item "src/PeekDesktop/bin/Release/net8.0-windows/win-arm64/publish/PeekDesktop.exe" -Destination "temp-arm64/"
+        Copy-Item "README.md" -Destination "temp-arm64/"
+        Compress-Archive -Path "temp-arm64/*" -DestinationPath "artifacts/PeekDesktop-v$version-win-arm64.zip"
+
+        Remove-Item "temp-x64" -Recurse -Force
+        Remove-Item "temp-arm64" -Recurse -Force
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: PeekDesktop-Release
+        path: artifacts/*.zip
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: artifacts/*.zip
+        generate_release_notes: true
+        body: |
+          ## PeekDesktop ${{ github.ref_name }}
+
+          **Click your desktop to peek at it — just like macOS Sonoma.**
+
+          ### 📦 Downloads
+
+          | File | Platform |
+          |------|----------|
+          | `PeekDesktop-${{ github.ref_name }}-win-x64.zip` | Intel/AMD 64-bit Windows |
+          | `PeekDesktop-${{ github.ref_name }}-win-arm64.zip` | ARM64 Windows (Surface Pro X, etc.) |
+
+          **Self-contained** - Extract and run, no .NET installation required.
+
+          ### 👀 How It Works
+          - Click your desktop wallpaper → all windows minimize
+          - Interact with your desktop freely
+          - Click any window or the taskbar → everything restores
+
+          ---
+        append_body: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
