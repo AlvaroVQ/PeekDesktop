@@ -27,16 +27,17 @@ internal sealed class Win32TrayIcon : IDisposable
     {
         _hIcon = hIcon;
         var nid = MakeNid();
-        nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+        nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
         nid.uCallbackMessage = WM_TRAYICON;
         nid.hIcon = hIcon;
-        SetTip(ref nid, tooltip);
+        nid.szTip = tooltip;
 
         Shell_NotifyIconW(NIM_ADD, ref nid);
 
-        // Request version 4 behavior for richer messages
-        nid.uVersion = NOTIFYICON_VERSION_4;
-        Shell_NotifyIconW(NIM_SETVERSION, ref nid);
+        // Request version 4 behavior in a separate call
+        var versionNid = MakeNid();
+        versionNid.uVersion = NOTIFYICON_VERSION_4;
+        Shell_NotifyIconW(NIM_SETVERSION, ref versionNid);
 
         _added = true;
     }
@@ -45,8 +46,8 @@ internal sealed class Win32TrayIcon : IDisposable
     {
         if (!_added) return;
         var nid = MakeNid();
-        nid.uFlags = NIF_TIP;
-        SetTip(ref nid, tooltip);
+        nid.uFlags = NIF_TIP | NIF_SHOWTIP;
+        nid.szTip = tooltip;
         Shell_NotifyIconW(NIM_MODIFY, ref nid);
     }
 
@@ -56,8 +57,8 @@ internal sealed class Win32TrayIcon : IDisposable
         var nid = MakeNid();
         nid.uFlags = NIF_INFO;
         nid.dwInfoFlags = NIIF_INFO;
-        SetInfoTitle(ref nid, title);
-        SetInfo(ref nid, text);
+        nid.szInfoTitle = title;
+        nid.szInfo = text;
         Shell_NotifyIconW(NIM_MODIFY, ref nid);
     }
 
@@ -110,36 +111,6 @@ internal sealed class Win32TrayIcon : IDisposable
 
     private static ushort LOWORD(IntPtr value) => (ushort)((long)value & 0xFFFF);
 
-    private static unsafe void SetTip(ref NOTIFYICONDATAW nid, string value)
-    {
-        fixed (char* p = nid.szTip)
-        {
-            int len = Math.Min(value.Length, 127);
-            value.AsSpan(0, len).CopyTo(new Span<char>(p, 128));
-            p[len] = '\0';
-        }
-    }
-
-    private static unsafe void SetInfo(ref NOTIFYICONDATAW nid, string value)
-    {
-        fixed (char* p = nid.szInfo)
-        {
-            int len = Math.Min(value.Length, 255);
-            value.AsSpan(0, len).CopyTo(new Span<char>(p, 256));
-            p[len] = '\0';
-        }
-    }
-
-    private static unsafe void SetInfoTitle(ref NOTIFYICONDATAW nid, string value)
-    {
-        fixed (char* p = nid.szInfoTitle)
-        {
-            int len = Math.Min(value.Length, 63);
-            value.AsSpan(0, len).CopyTo(new Span<char>(p, 64));
-            p[len] = '\0';
-        }
-    }
-
     // --- Constants ---
     private const uint NIM_ADD = 0;
     private const uint NIM_MODIFY = 1;
@@ -149,6 +120,7 @@ internal sealed class Win32TrayIcon : IDisposable
     private const uint NIF_ICON = 0x02;
     private const uint NIF_TIP = 0x04;
     private const uint NIF_INFO = 0x10;
+    private const uint NIF_SHOWTIP = 0x80;
     private const uint NIIF_INFO = 0x01;
     private const uint NOTIFYICON_VERSION_4 = 4;
     private const ushort WM_RBUTTONUP = 0x0205;
@@ -157,8 +129,9 @@ internal sealed class Win32TrayIcon : IDisposable
     private const ushort NIN_BALLOONUSERCLICK = 0x0405;
 
     // --- Struct ---
+    // Using ByValTStr for string fields ensures proper marshaling to Shell_NotifyIconW.
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private unsafe struct NOTIFYICONDATAW
+    private struct NOTIFYICONDATAW
     {
         public uint cbSize;
         public IntPtr hWnd;
@@ -166,12 +139,15 @@ internal sealed class Win32TrayIcon : IDisposable
         public uint uFlags;
         public uint uCallbackMessage;
         public IntPtr hIcon;
-        public fixed char szTip[128];
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string? szTip;
         public uint dwState;
         public uint dwStateMask;
-        public fixed char szInfo[256];
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string? szInfo;
         public uint uVersion; // union with uTimeout
-        public fixed char szInfoTitle[64];
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string? szInfoTitle;
         public uint dwInfoFlags;
         public Guid guidItem;
         public IntPtr hBalloonIcon;
