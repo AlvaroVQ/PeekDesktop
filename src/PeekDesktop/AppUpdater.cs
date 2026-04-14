@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Net.Http;
 using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -12,8 +11,6 @@ internal sealed class AppUpdater
 {
     private const string LatestReleaseApiUrl = "https://api.github.com/repos/shanselman/PeekDesktop/releases/latest";
     private const string ReleasesPageUrl = "https://github.com/shanselman/PeekDesktop/releases/latest";
-
-    private static readonly HttpClient HttpClient = CreateHttpClient();
 
     private readonly Win32MessageLoop? _messageLoop;
     private bool _isChecking;
@@ -133,25 +130,13 @@ internal sealed class AppUpdater
 
     private static async Task<GitHubReleaseInfo?> GetLatestReleaseAsync()
     {
-        using HttpResponseMessage response = await HttpClient.GetAsync(LatestReleaseApiUrl);
-        response.EnsureSuccessStatusCode();
+        // WinHttp is synchronous; run on thread pool to keep UI responsive
+        string json = await Task.Run(() =>
+            WinHttp.Get(LatestReleaseApiUrl, "PeekDesktop", timeoutSeconds: 10));
 
-        await using var stream = await response.Content.ReadAsStreamAsync();
-        return await System.Text.Json.JsonSerializer.DeserializeAsync(
-            stream,
+        return System.Text.Json.JsonSerializer.Deserialize(
+            json,
             PeekDesktopJsonContext.Default.GitHubReleaseInfo);
-    }
-
-    private static HttpClient CreateHttpClient()
-    {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(10)
-        };
-
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("PeekDesktop");
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
-        return client;
     }
 
     private static string GetCurrentVersion()
