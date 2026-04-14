@@ -5,19 +5,19 @@ namespace PeekDesktop;
 
 internal static class AppDiagnostics
 {
-    [Conditional("DEBUG")]
+    [Conditional("TRACE")]
     public static void Metric(string message)
     {
         Trace.WriteLine($"[PeekDesktop BENCH {DateTime.Now:HH:mm:ss.fff}] {message}");
     }
 
-    [Conditional("DEBUG")]
+    [Conditional("TRACE")]
     public static void Log(string message)
     {
         Debug.WriteLine($"[PeekDesktop {DateTime.Now:HH:mm:ss.fff}] {message}");
     }
 
-    [Conditional("DEBUG")]
+    [Conditional("TRACE")]
     public static void LogWindow(string prefix, IntPtr hwnd)
     {
         Log($"{prefix}: {NativeMethods.DescribeWindow(hwnd)}");
