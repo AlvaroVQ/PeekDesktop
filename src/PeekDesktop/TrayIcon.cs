@@ -86,21 +86,37 @@ internal sealed class TrayIcon : IDisposable
             Checked = _settings.PeekMode == PeekMode.FlyAway
         };
 
+        var nativeDesktopModeItem = new ToolStripMenuItem("Native Show Desktop (Win+D)")
+        {
+            Checked = _settings.PeekMode == PeekMode.NativeShowDesktop
+        };
+
+        var cloakModeItem = new ToolStripMenuItem("Cloak (Experimental)")
+        {
+            Checked = _settings.PeekMode == PeekMode.Cloak
+        };
+
         void SetPeekMode(PeekMode peekMode)
         {
             _settings.PeekMode = peekMode;
             _desktopPeek.PeekMode = peekMode;
             classicModeItem.Checked = peekMode == PeekMode.Minimize;
             flyAwayModeItem.Checked = peekMode == PeekMode.FlyAway;
+            nativeDesktopModeItem.Checked = peekMode == PeekMode.NativeShowDesktop;
+            cloakModeItem.Checked = peekMode == PeekMode.Cloak;
             _settings.Save();
         }
 
         classicModeItem.Click += (_, _) => SetPeekMode(PeekMode.Minimize);
         flyAwayModeItem.Click += (_, _) => SetPeekMode(PeekMode.FlyAway);
+        nativeDesktopModeItem.Click += (_, _) => SetPeekMode(PeekMode.NativeShowDesktop);
+        cloakModeItem.Click += (_, _) => SetPeekMode(PeekMode.Cloak);
 
         var peekStyleMenu = new ToolStripMenuItem("Peek Style");
         peekStyleMenu.DropDownItems.Add(classicModeItem);
         peekStyleMenu.DropDownItems.Add(flyAwayModeItem);
+        peekStyleMenu.DropDownItems.Add(nativeDesktopModeItem);
+        peekStyleMenu.DropDownItems.Add(cloakModeItem);
 
         var aboutItem = new ToolStripMenuItem("About PeekDesktop");
         aboutItem.Click += (_, _) =>
@@ -111,8 +127,8 @@ internal sealed class TrayIcon : IDisposable
                 "Click your desktop wallpaper to peek at your desktop,\n" +
                 "just like macOS Sonoma.\n\n" +
                 "Click any window or the taskbar to restore.\n" +
-                "Peek Style lets you switch between classic minimize\n" +
-                "and the fly-away experiment.\n\n" +
+                "Peek Style lets you switch between classic minimize,\n" +
+                "fly-away, native show desktop, and cloak experiments.\n\n" +
                 "Updates come from GitHub Releases.\n\n" +
                 "github.com/shanselman/PeekDesktop",
                 "About PeekDesktop",

@@ -47,7 +47,14 @@ internal static class NativeMethods
     public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     // --- DWM constants ---
+    public const int DWMWA_CLOAK = 13;
     public const int DWMWA_CLOAKED = 14;
+
+    // --- Keyboard input ---
+    private const int INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_KEYUP = 0x0002;
+    private const ushort VK_LWIN = 0x5B;
+    private const ushort VK_D = 0x44;
 
     // --- MSAA accessible roles ---
     public const int ROLE_SYSTEM_LISTITEM = 0x22;
@@ -125,6 +132,30 @@ internal static class NativeMethods
         public int iItem;
         public int iSubItem;
         public int iGroup;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public int type;
+        public InputUnion U;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)]
+        public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
     }
 
     #endregion
@@ -276,6 +307,10 @@ internal static class NativeMethods
     private static extern int DwmGetWindowAttribute(
         IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromPoint(
         POINT pt,
@@ -303,6 +338,9 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, [Out] byte[] lpBuffer, int nSize, out IntPtr lpNumberOfBytesRead);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     #endregion
 
@@ -422,6 +460,27 @@ internal static class NativeMethods
         return hr == 0 && cloaked != 0;
     }
 
+    public static bool TrySetWindowCloak(IntPtr hwnd, bool cloaked)
+    {
+        int value = cloaked ? 1 : 0;
+        int hr = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref value, sizeof(int));
+        return hr == 0;
+    }
+
+    public static bool TryToggleDesktopWithWinD()
+    {
+        INPUT[] inputs =
+        [
+            CreateKeyInput(VK_LWIN, keyUp: false),
+            CreateKeyInput(VK_D, keyUp: false),
+            CreateKeyInput(VK_D, keyUp: true),
+            CreateKeyInput(VK_LWIN, keyUp: true)
+        ];
+
+        uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        return sent == inputs.Length;
+    }
+
     private static IntPtr FindAncestorByClassName(IntPtr hwnd, string className)
     {
         IntPtr current = hwnd;
@@ -489,6 +548,22 @@ internal static class NativeMethods
 
             CloseHandle(processHandle);
         }
+    }
+
+    private static INPUT CreateKeyInput(ushort virtualKey, bool keyUp)
+    {
+        return new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = virtualKey,
+                    dwFlags = keyUp ? KEYEVENTF_KEYUP : 0
+                }
+            }
+        };
     }
 
     #endregion

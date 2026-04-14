@@ -19,7 +19,9 @@ public sealed class DesktopPeek : IDisposable
 
     private bool _isPeeking;
     private bool _isTransitioning; // suppresses events during minimize/restore
+    private bool _nativeShellToggled;
     private long _ignoreFocusUntil;
+    private PeekMode _activePeekMode = PeekMode.Minimize;
 
     public bool IsEnabled { get; set; } = true;
     public bool IsPeeking => _isPeeking;
@@ -133,13 +135,34 @@ public sealed class DesktopPeek : IDisposable
         AppDiagnostics.Log("Beginning peek transition");
         try
         {
+            _activePeekMode = PeekMode;
+
+            if (_activePeekMode == PeekMode.NativeShowDesktop)
+            {
+                if (NativeMethods.TryToggleDesktopWithWinD())
+                {
+                    _windowTracker.ClearSavedWindows();
+                    _nativeShellToggled = true;
+                    _isPeeking = true;
+                    _ignoreFocusUntil = Environment.TickCount64 + PostPeekFocusGracePeriodMs;
+                    AppDiagnostics.Log($"Peek mode active; ignoring focus churn for {PostPeekFocusGracePeriodMs}ms");
+                    AppDiagnostics.Log("Win+D native show desktop activated");
+                    return;
+                }
+
+                AppDiagnostics.Log("Win+D native show desktop failed; falling back to classic minimize");
+                _activePeekMode = PeekMode.Minimize;
+            }
+
             _windowTracker.CaptureWindows();
             if (_windowTracker.HasWindows)
             {
-                AppDiagnostics.Log($"Captured {_windowTracker.SavedWindowCount} window(s); applying {PeekMode} effect");
+                AppDiagnostics.Log($"Captured {_windowTracker.SavedWindowCount} window(s); applying {_activePeekMode} effect");
 
-                if (PeekMode == PeekMode.FlyAway)
+                if (_activePeekMode == PeekMode.FlyAway)
                     _windowTracker.FlyAwayAll();
+                else if (_activePeekMode == PeekMode.Cloak)
+                    _windowTracker.CloakAll();
                 else
                     _windowTracker.MinimizeAll();
 
@@ -168,8 +191,20 @@ public sealed class DesktopPeek : IDisposable
         try
         {
             _ignoreFocusUntil = 0;
-            _windowTracker.RestoreAll(PeekMode);
+
+            if (_nativeShellToggled)
+            {
+                NativeMethods.TryToggleDesktopWithWinD();
+                _windowTracker.ClearSavedWindows();
+                _nativeShellToggled = false;
+            }
+            else
+            {
+                _windowTracker.RestoreAll(_activePeekMode);
+            }
+
             _isPeeking = false;
+            _activePeekMode = PeekMode;
             AppDiagnostics.Log("Restore complete; returned to idle");
         }
         finally

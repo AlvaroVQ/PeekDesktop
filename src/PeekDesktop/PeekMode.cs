@@ -3,5 +3,7 @@ namespace PeekDesktop;
 public enum PeekMode
 {
     Minimize = 0,
-    FlyAway = 1
+    FlyAway = 1,
+    NativeShowDesktop = 2,
+    Cloak = 3
 }

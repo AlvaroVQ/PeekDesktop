@@ -68,6 +68,35 @@ public sealed class WindowTracker
         AppDiagnostics.Metric($"MinimizeAll: {_savedWindows.Count} window(s) in {stopwatch.ElapsedMilliseconds}ms");
     }
 
+    public void CloakAll()
+    {
+        var stopwatch = Stopwatch.StartNew();
+        int cloakedCount = 0;
+        int fallbackMinimized = 0;
+
+        foreach (var window in _savedWindows)
+        {
+            AppDiagnostics.LogWindow("Cloaking window", window.Handle);
+
+            if (NativeMethods.TrySetWindowCloak(window.Handle, true))
+            {
+                cloakedCount++;
+            }
+            else
+            {
+                NativeMethods.ShowWindow(window.Handle, NativeMethods.SW_MINIMIZE);
+                fallbackMinimized++;
+            }
+        }
+
+        AppDiagnostics.Metric($"CloakAll: {cloakedCount} cloaked, {fallbackMinimized} minimized fallback in {stopwatch.ElapsedMilliseconds}ms");
+    }
+
+    public void ClearSavedWindows()
+    {
+        _savedWindows.Clear();
+    }
+
     /// <summary>
     /// Move captured windows toward the corner of the screen they are already closest to.
     /// This is an experiment to mimic macOS-style "show desktop" animation.
@@ -128,6 +157,17 @@ public sealed class WindowTracker
             }
 
             AnimateWindows(animationWindows);
+        }
+
+        if (peekMode == PeekMode.Cloak)
+        {
+            foreach (var info in _savedWindows)
+            {
+                if (!NativeMethods.IsWindow(info.Handle))
+                    continue;
+
+                NativeMethods.TrySetWindowCloak(info.Handle, false);
+            }
         }
 
         // Restore in reverse order (bottom windows first) to preserve Z-order
