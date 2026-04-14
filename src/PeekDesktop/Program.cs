@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -18,6 +20,7 @@ public static class Program
 
         Application.EnableVisualStyles();
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        ConfigureTraceLogging();
 
         try
         {
@@ -28,6 +31,20 @@ public static class Program
             _mutex.ReleaseMutex();
             _mutex.Dispose();
         }
+    }
+
+    private static void ConfigureTraceLogging()
+    {
+        string logDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PeekDesktop");
+
+        Directory.CreateDirectory(logDir);
+
+        string logPath = Path.Combine(logDir, "PeekDesktop.log");
+        Trace.Listeners.Clear();
+        Trace.Listeners.Add(new TextWriterTraceListener(logPath));
+        Trace.AutoFlush = true;
     }
 }
 

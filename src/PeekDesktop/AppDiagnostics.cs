@@ -32,7 +32,6 @@ internal static class AppDiagnostics
         string prefix = category is null ? "PeekDesktop" : $"PeekDesktop {category}";
         string line = $"[{prefix} {DateTime.Now:HH:mm:ss.fff}] {message}";
         Trace.WriteLine(line);
-        Debug.WriteLine(line);
         OutputDebugString(line);
     }
 }

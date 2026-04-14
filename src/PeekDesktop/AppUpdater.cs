@@ -114,6 +114,8 @@ internal sealed class AppUpdater
 
     private void RaiseUpdateAvailable(string version, string releaseUrl)
     {
+        AppDiagnostics.Log($"Update available: version={version}, url={releaseUrl}");
+
         if (_syncContext is not null)
         {
             _syncContext.Post(_ => UpdateAvailable?.Invoke(this, new UpdateAvailableEventArgs(version, releaseUrl)), null);
@@ -149,8 +151,30 @@ internal sealed class AppUpdater
     private static string GetCurrentVersion()
     {
         var assembly = typeof(Program).Assembly;
+        Version? assemblyVersion = assembly.GetName().Version;
         string? informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        string rawVersion = informationalVersion ?? assembly.GetName().Version?.ToString() ?? "0.0.0";
+        string rawVersion;
+
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+        {
+            string normalizedInformational = NormalizeVersion(informationalVersion);
+            string normalizedAssembly = assemblyVersion is null ? string.Empty : NormalizeVersion(assemblyVersion.ToString());
+            string numericInformational = ExtractNumericPrefix(normalizedInformational);
+            string numericAssembly = ExtractNumericPrefix(normalizedAssembly);
+
+            // Fresh local builds inherit the default 1.0.0 version unless CI/tagging stamps them.
+            // Treat that case as a dev build so GitHub releases still show as updates during testing.
+            rawVersion = numericInformational == "1.0.0" && numericInformational == numericAssembly
+                ? "0.0.0-dev"
+                : informationalVersion;
+        }
+        else
+        {
+            rawVersion = assemblyVersion is null || assemblyVersion == new Version(1, 0, 0, 0)
+                ? "0.0.0-dev"
+                : assemblyVersion.ToString();
+        }
+
         return NormalizeVersion(rawVersion);
     }
 

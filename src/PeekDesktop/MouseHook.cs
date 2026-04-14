@@ -82,7 +82,11 @@ public sealed class MouseHook : IDisposable
 
     private void HandleMouseClick(IntPtr windowUnderCursor, NativeMethods.POINT clickPoint)
     {
-        AppDiagnostics.LogWindow("Mouse click target", windowUnderCursor);
+        var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(clickPoint.x, clickPoint.y));
+        AppDiagnostics.Log($"Mouse click screen: {screen.DeviceName} bounds={screen.Bounds} primary={screen.Primary}");
+        AppDiagnostics.Log($"Mouse click point: {NativeMethods.DescribePoint(clickPoint)}");
+        AppDiagnostics.Log($"Mouse click target: {NativeMethods.DescribeWindow(windowUnderCursor)}");
+        AppDiagnostics.Log($"Mouse click hierarchy: {NativeMethods.DescribeWindowHierarchy(windowUnderCursor)}");
         DesktopClickTarget clickTarget = DesktopDetector.GetClickTarget(windowUnderCursor, clickPoint);
         AppDiagnostics.Log($"Mouse click classification: {clickTarget}");
 

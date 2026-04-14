@@ -28,7 +28,16 @@ public sealed class Settings
             if (File.Exists(SettingsPath))
             {
                 string json = File.ReadAllText(SettingsPath);
-                return JsonSerializer.Deserialize(json, PeekDesktopJsonContext.Default.Settings) ?? new Settings();
+                Settings settings = JsonSerializer.Deserialize(json, PeekDesktopJsonContext.Default.Settings) ?? new Settings();
+                PeekMode normalizedMode = NormalizePeekMode(settings.PeekMode);
+                if (settings.PeekMode != normalizedMode)
+                {
+                    AppDiagnostics.Log($"Unsupported peek mode '{settings.PeekMode}' migrated to {normalizedMode}.");
+                    settings.PeekMode = normalizedMode;
+                    settings.Save();
+                }
+
+                return settings;
             }
         }
         catch (Exception ex)
@@ -50,6 +59,19 @@ public sealed class Settings
         {
             AppDiagnostics.Log($"Failed to save settings to {SettingsPath}: {ex.Message}");
         }
+    }
+
+    private static PeekMode NormalizePeekMode(PeekMode peekMode)
+    {
+        return peekMode switch
+        {
+            PeekMode.Minimize => PeekMode.Minimize,
+            PeekMode.FlyAway => PeekMode.FlyAway,
+            PeekMode.NativeShowDesktop => PeekMode.NativeShowDesktop,
+            PeekMode.VirtualDesktop => PeekMode.VirtualDesktop,
+            (PeekMode)3 => PeekMode.NativeShowDesktop, // legacy Cloak setting
+            _ => PeekMode.NativeShowDesktop
+        };
     }
 
     /// <summary>

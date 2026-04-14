@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -48,11 +49,11 @@ internal static class NativeMethods
     public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     // --- DWM constants ---
-    public const int DWMWA_CLOAK = 13;
     public const int DWMWA_CLOAKED = 14;
 
     // --- Keyboard input ---
     private const int INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const ushort VK_LWIN = 0x5B;
     private const ushort VK_D = 0x44;
@@ -146,7 +147,24 @@ internal static class NativeMethods
     private struct InputUnion
     {
         [FieldOffset(0)]
+        public MOUSEINPUT mi;
+
+        [FieldOffset(0)]
         public KEYBDINPUT ki;
+
+        [FieldOffset(0)]
+        public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -157,6 +175,14 @@ internal static class NativeMethods
         public uint dwFlags;
         public uint time;
         public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL;
+        public ushort wParamH;
     }
 
     #endregion
@@ -190,6 +216,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
     [DllImport("user32.dll")]
@@ -215,6 +245,9 @@ internal static class NativeMethods
         IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern int GetWindowTextLength(IntPtr hWnd);
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -234,6 +267,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -299,6 +336,16 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool AttachThreadInput(
+        uint idAttach,
+        uint idAttachTo,
+        [MarshalAs(UnmanagedType.Bool)] bool fAttach);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(
         IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam,
@@ -307,10 +354,6 @@ internal static class NativeMethods
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(
         IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(
-        IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
 
     [DllImport("oleacc.dll")]
     private static extern int AccessibleObjectFromPoint(
@@ -343,6 +386,15 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    [DllImport("api-ms-win-core-winrt-string-l1-1-0.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int WindowsCreateString(
+        [MarshalAs(UnmanagedType.LPWStr)] string sourceString,
+        int length,
+        out IntPtr hstring);
+
+    [DllImport("api-ms-win-core-winrt-string-l1-1-0.dll", CallingConvention = CallingConvention.StdCall)]
+    public static extern int WindowsDeleteString(IntPtr hstring);
+
     #endregion
 
     #region Helpers
@@ -373,6 +425,33 @@ internal static class NativeMethods
         string className = GetWindowClassName(hwnd);
         string title = GetWindowTitle(hwnd);
         return $"hwnd=0x{hwnd.ToInt64():X} class={className} title=\"{title}\"";
+    }
+
+    public static string DescribePoint(POINT point)
+    {
+        return $"x={point.x}, y={point.y}";
+    }
+
+    public static bool TryGetCursorPoint(out POINT point)
+    {
+        return GetCursorPos(out point);
+    }
+
+    public static string DescribeWindowHierarchy(IntPtr hwnd, int maxDepth = 8)
+    {
+        if (hwnd == IntPtr.Zero)
+            return "<none>";
+
+        var parts = new List<string>();
+        IntPtr current = hwnd;
+
+        while (current != IntPtr.Zero && parts.Count < maxDepth)
+        {
+            parts.Add(DescribeWindow(current));
+            current = GetParent(current);
+        }
+
+        return string.Join(" -> ", parts);
     }
 
     public static bool TryGetAccessibleDetailsAtPoint(POINT point, out int role, out string name)
@@ -461,28 +540,21 @@ internal static class NativeMethods
         return hr == 0 && cloaked != 0;
     }
 
-    public static bool TrySetWindowCloak(IntPtr hwnd, bool cloaked)
-    {
-        int value = cloaked ? 1 : 0;
-        int hr = DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref value, sizeof(int));
-        return hr == 0;
-    }
-
     public static bool TryToggleDesktop()
     {
-        if (TryToggleDesktopWithShell())
-        {
-            AppDiagnostics.Log("Show desktop activated via Shell.Application.ToggleDesktop");
-            return true;
-        }
-
         if (TryToggleDesktopWithWinD())
         {
-            AppDiagnostics.Log("Show desktop activated via Win+D input fallback");
+            AppDiagnostics.Log("Show desktop activated via Win+D input");
             return true;
         }
 
-        AppDiagnostics.Log("Failed to toggle desktop using both shell and Win+D fallback");
+        if (TryToggleDesktopWithShell())
+        {
+            AppDiagnostics.Log("Show desktop activated via Shell.Application.ToggleDesktop fallback");
+            return true;
+        }
+
+        AppDiagnostics.Log("Failed to toggle desktop using Win+D and shell fallback");
         return false;
     }
 
@@ -542,14 +614,21 @@ internal static class NativeMethods
     {
         INPUT[] inputs =
         [
-            CreateKeyInput(VK_LWIN, keyUp: false),
+            CreateKeyInput(VK_LWIN, keyUp: false, extendedKey: true),
             CreateKeyInput(VK_D, keyUp: false),
             CreateKeyInput(VK_D, keyUp: true),
-            CreateKeyInput(VK_LWIN, keyUp: true)
+            CreateKeyInput(VK_LWIN, keyUp: true, extendedKey: true)
         ];
 
         uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-        return sent == inputs.Length;
+        if (sent != inputs.Length)
+        {
+            int lastError = Marshal.GetLastWin32Error();
+            AppDiagnostics.Log($"Win+D SendInput failed: sent={sent}/{inputs.Length} lastError={lastError}");
+            return false;
+        }
+
+        return true;
     }
 
     private static IntPtr FindAncestorByClassName(IntPtr hwnd, string className)
@@ -621,8 +700,12 @@ internal static class NativeMethods
         }
     }
 
-    private static INPUT CreateKeyInput(ushort virtualKey, bool keyUp)
+    private static INPUT CreateKeyInput(ushort virtualKey, bool keyUp, bool extendedKey = false)
     {
+        uint flags = keyUp ? KEYEVENTF_KEYUP : 0;
+        if (extendedKey)
+            flags |= KEYEVENTF_EXTENDEDKEY;
+
         return new INPUT
         {
             type = INPUT_KEYBOARD,
@@ -631,7 +714,7 @@ internal static class NativeMethods
                 ki = new KEYBDINPUT
                 {
                     wVk = virtualKey,
-                    dwFlags = keyUp ? KEYEVENTF_KEYUP : 0
+                    dwFlags = flags
                 }
             }
         };

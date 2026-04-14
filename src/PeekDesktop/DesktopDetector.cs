@@ -22,7 +22,15 @@ public static class DesktopDetector
     internal static DesktopClickTarget GetClickTarget(IntPtr hwnd, NativeMethods.POINT point)
     {
         if (!IsDesktopRelatedWindow(hwnd))
+        {
+            AppDiagnostics.Log($"Desktop relationship check failed at {NativeMethods.DescribePoint(point)}");
+            AppDiagnostics.Log($"Desktop relationship reason: {GetDesktopRelationshipReason(hwnd)}");
+
+            if (NativeMethods.TryGetAccessibleDetailsAtPoint(point, out int role, out string name))
+                AppDiagnostics.Log($"Non-desktop accessibility probe: role=0x{role:X} name=\"{name}\"");
+
             return DesktopClickTarget.NonDesktop;
+        }
 
         if (IsDesktopIconWindow(hwnd))
         {
@@ -41,6 +49,32 @@ public static class DesktopDetector
         }
 
         return DesktopClickTarget.DesktopBackground;
+    }
+
+    internal static string GetDesktopRelationshipReason(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return "window handle was zero";
+
+        IntPtr current = hwnd;
+        while (current != IntPtr.Zero)
+        {
+            string className = NativeMethods.GetWindowClassName(current);
+
+            if (string.Equals(className, "Progman", StringComparison.OrdinalIgnoreCase))
+                return $"matched Progman ancestor: {NativeMethods.DescribeWindow(current)}";
+
+            if (string.Equals(className, "WorkerW", StringComparison.OrdinalIgnoreCase))
+            {
+                IntPtr shellView = NativeMethods.FindWindowEx(current, IntPtr.Zero, "SHELLDLL_DefView", null);
+                if (shellView != IntPtr.Zero)
+                    return $"matched desktop WorkerW ancestor: {NativeMethods.DescribeWindow(current)}";
+            }
+
+            current = NativeMethods.GetParent(current);
+        }
+
+        return $"no desktop ancestor found. hierarchy={NativeMethods.DescribeWindowHierarchy(hwnd)}";
     }
 
     /// <summary>
@@ -92,6 +126,12 @@ public static class DesktopDetector
         if (string.Equals(className, "#32768", StringComparison.OrdinalIgnoreCase))
             return true;
         if (string.Equals(className, "tooltips_class32", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(className, "Shell_TrayWnd", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(className, "Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(className, "TopLevelWindowForOverflowXamlIsland", StringComparison.OrdinalIgnoreCase))
             return true;
 
         return IsDesktopRelatedWindow(hwnd);
