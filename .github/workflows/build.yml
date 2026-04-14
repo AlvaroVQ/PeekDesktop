@@ -121,7 +121,7 @@ jobs:
         signing-account-name: ${{ env.TRUSTED_SIGNING_ACCOUNT }}
         certificate-profile-name: ${{ env.TRUSTED_SIGNING_PROFILE }}
         files-folder: ${{ github.workspace }}\src\PeekDesktop\bin\Release\net10.0-windows
-        files-folder-filter: *.exe,*.dll
+        files-folder-filter: "*.exe,*.dll"
         files-folder-recurse: true
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
