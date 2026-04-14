@@ -5,12 +5,21 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      allow_unsigned:
+        description: Allow unsigned artifacts for a manual test build
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
+  id-token: write
 
 env:
+  ALLOW_UNSIGNED: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.allow_unsigned == 'true' }}
   HAS_AZURE_SIGNING: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_SUBSCRIPTION_ID != '' && secrets.AZURE_TENANT_ID != '' }}
+  TRUSTED_SIGNING_ENDPOINT: ${{ vars.AZURE_TRUSTED_SIGNING_ENDPOINT || 'https://wus2.codesigning.azure.net/' }}
   TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT || 'hanselman' }}
   TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME || 'WindowsEdgeLight' }}
 
@@ -28,6 +37,12 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '10.0.x'
+
+    - name: Require signing configuration
+      if: env.HAS_AZURE_SIGNING != 'true' && env.ALLOW_UNSIGNED != 'true'
+      shell: pwsh
+      run: |
+        throw "Trusted Signing is not configured. Set the Azure signing secrets/variables, or use workflow_dispatch with allow_unsigned=true for a one-off dry run."
 
     - name: Restore dependencies
       run: dotnet restore src/PeekDesktop/PeekDesktop.csproj
@@ -102,20 +117,38 @@ jobs:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
         azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-        endpoint: https://wus2.codesigning.azure.net/
+        endpoint: ${{ env.TRUSTED_SIGNING_ENDPOINT }}
         signing-account-name: ${{ env.TRUSTED_SIGNING_ACCOUNT }}
         certificate-profile-name: ${{ env.TRUSTED_SIGNING_PROFILE }}
         files-folder: ${{ github.workspace }}\src\PeekDesktop\bin\Release\net10.0-windows
-        files-folder-filter: exe
+        files-folder-filter: *.exe,*.dll
         files-folder-recurse: true
         file-digest: SHA256
         timestamp-rfc3161: http://timestamp.acs.microsoft.com
         timestamp-digest: SHA256
 
-    - name: Signing skipped
-      if: env.HAS_AZURE_SIGNING != 'true'
+    - name: Verify signatures
+      if: env.HAS_AZURE_SIGNING == 'true'
       shell: pwsh
-      run: Write-Host "Azure signing secrets are not configured; continuing with unsigned release artifacts."
+      run: |
+        $files = @(
+          "src/PeekDesktop/bin/Release/net10.0-windows/win-x64/publish/PeekDesktop.exe",
+          "src/PeekDesktop/bin/Release/net10.0-windows/win-arm64/publish/PeekDesktop.exe"
+        )
+
+        foreach ($file in $files) {
+          $signature = Get-AuthenticodeSignature -FilePath $file
+          Write-Host "$file => $($signature.Status)"
+
+          if ($signature.Status -ne 'Valid') {
+            throw "Signature verification failed for $file"
+          }
+        }
+
+    - name: Signing skipped
+      if: env.HAS_AZURE_SIGNING != 'true' && env.ALLOW_UNSIGNED == 'true'
+      shell: pwsh
+      run: Write-Host "Trusted Signing is not configured for this repo yet; continuing only because this is not a tagged release."
 
     - name: Prepare artifacts
       shell: pwsh
