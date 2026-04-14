@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Forms;
 
 namespace PeekDesktop;
 
@@ -21,15 +22,18 @@ public sealed class DesktopPeek : IDisposable
     private bool _isTransitioning; // suppresses events during minimize/restore
     private bool _nativeShellToggled;
     private long _ignoreFocusUntil;
+    private long? _lastDesktopClickTick; // for double-click detection; null = no pending first click
     private PeekMode _activePeekMode = PeekMode.Minimize;
 
     public bool IsEnabled { get; set; } = true;
     public bool IsPeeking => _isPeeking;
     public PeekMode PeekMode { get; set; }
+    public bool DoubleClickToActivate { get; set; }
 
     public DesktopPeek(Settings settings)
     {
         PeekMode = settings.PeekMode;
+        DoubleClickToActivate = settings.DoubleClickToActivate;
         AppDiagnostics.Log("DesktopPeek created");
         _mouseHook.DesktopClicked += OnDesktopClicked;
         _mouseHook.DesktopIconClicked += OnDesktopIconClicked;
@@ -92,6 +96,22 @@ public sealed class DesktopPeek : IDisposable
             AppDiagnostics.Log("Desktop clicked again while peeking; restoring windows");
             RestoreWindows();
             return;
+        }
+
+        if (DoubleClickToActivate)
+        {
+            long now = Environment.TickCount64;
+            long threshold = SystemInformation.DoubleClickTime;
+
+            if (_lastDesktopClickTick is null || (now - _lastDesktopClickTick.Value) >= threshold)
+            {
+                _lastDesktopClickTick = now;
+                AppDiagnostics.Log($"Double-click mode: first click recorded; waiting for second click within {threshold}ms");
+                return;
+            }
+
+            AppDiagnostics.Log("Double-click mode: second click detected; entering peek mode");
+            _lastDesktopClickTick = null; // reset so a third click needs a fresh double-click
         }
 
         AppDiagnostics.Log("Desktop click accepted; entering peek mode");

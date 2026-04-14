@@ -20,6 +20,7 @@ public sealed class Settings
     public bool Enabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
     public PeekMode PeekMode { get; set; } = PeekMode.NativeShowDesktop;
+    public bool DoubleClickToActivate { get; set; } = false;
 
     public static Settings Load()
     {

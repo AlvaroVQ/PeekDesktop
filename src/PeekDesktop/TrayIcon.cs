@@ -16,6 +16,7 @@ internal sealed class TrayIcon : IDisposable
     private readonly Settings _settings;
     private readonly Action _exitAction;
     private readonly ToolStripMenuItem _enabledItem;
+    private readonly ToolStripMenuItem _doubleClickItem;
 
     public TrayIcon(DesktopPeek desktopPeek, AppUpdater appUpdater, Settings settings, Action exitAction)
     {
@@ -27,6 +28,12 @@ internal sealed class TrayIcon : IDisposable
         _enabledItem = new ToolStripMenuItem("Enabled")
         {
             Checked = _settings.Enabled,
+            CheckOnClick = true
+        };
+
+        _doubleClickItem = new ToolStripMenuItem("Double-click to activate")
+        {
+            Checked = _settings.DoubleClickToActivate,
             CheckOnClick = true
         };
 
@@ -61,6 +68,13 @@ internal sealed class TrayIcon : IDisposable
             else
                 _desktopPeek.Stop();
 
+            _settings.Save();
+        };
+
+        _doubleClickItem.CheckedChanged += (_, _) =>
+        {
+            _settings.DoubleClickToActivate = _doubleClickItem.Checked;
+            _desktopPeek.DoubleClickToActivate = _doubleClickItem.Checked;
             _settings.Save();
         };
 
@@ -148,6 +162,7 @@ internal sealed class TrayIcon : IDisposable
         };
 
         menu.Items.Add(_enabledItem);
+        menu.Items.Add(_doubleClickItem);
         menu.Items.Add(startupItem);
         menu.Items.Add(peekStyleMenu);
         menu.Items.Add(new ToolStripSeparator());
