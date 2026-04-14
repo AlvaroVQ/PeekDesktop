@@ -14,10 +14,10 @@ PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to
 
 | File | Platform |
 |------|----------|
-| `PeekDesktop-v0.1-win-x64.zip` | Intel/AMD (most PCs) |
-| `PeekDesktop-v0.1-win-arm64.zip` | ARM64 (Surface Pro X, Snapdragon, etc.) |
+| `PeekDesktop-vX.Y-win-x64.zip` | Intel/AMD (most PCs) |
+| `PeekDesktop-vX.Y-win-arm64.zip` | ARM64 (Surface Pro X, Snapdragon, etc.) |
 
-No installer needed. Download the zip, extract it, and run `PeekDesktop.exe`. It lives in your system tray.
+No installer needed. Download the zip, extract it, and run `PeekDesktop.exe`. It lives in your system tray and can check GitHub Releases for updates.
 
 ## How It Works
 
@@ -47,6 +47,7 @@ Right-click the tray icon for options:
 - ✅ **Enabled** — toggle the peek feature on/off
 - 🔁 **Start with Windows** — launch automatically at login
 - ℹ️ **About** — version info
+- ⬇️ **Check for Updates** — pull the latest GitHub Release from the tray
 - ❌ **Exit** — quit PeekDesktop
 
 ## macOS Sonoma vs PeekDesktop
@@ -136,6 +137,7 @@ PRs welcome! Current status and next ideas:
 - [x] Clicking or dragging desktop icons does **not** start peek
 - [x] Desktop icons remain usable while peeking
 - [x] Exact window positions are restored
+- [x] GitHub release-based update checks
 - [ ] Smooth minimize/restore animations (slide/fade)
 - [ ] Hotkey support (e.g., `Ctrl+F12` to toggle peek)
 - [ ] Per-monitor peek (only minimize windows on the clicked monitor)

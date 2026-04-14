@@ -126,6 +126,7 @@ public sealed class DesktopPeek : IDisposable
 
     private void PeekDesktopNow()
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         _isTransitioning = true;
         AppDiagnostics.Log("Beginning peek transition");
         try
@@ -148,11 +149,13 @@ public sealed class DesktopPeek : IDisposable
         {
             _isTransitioning = false;
             AppDiagnostics.Log("Peek transition complete");
+            AppDiagnostics.Metric($"PeekDesktopNow total: {stopwatch.ElapsedMilliseconds}ms");
         }
     }
 
     private void RestoreWindows()
     {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         _isTransitioning = true;
         AppDiagnostics.Log($"Beginning restore transition for {_windowTracker.SavedWindowCount} window(s)");
         try
@@ -165,6 +168,7 @@ public sealed class DesktopPeek : IDisposable
         finally
         {
             _isTransitioning = false;
+            AppDiagnostics.Metric($"RestoreWindows total: {stopwatch.ElapsedMilliseconds}ms");
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace PeekDesktop;
@@ -20,6 +21,7 @@ public sealed class WindowTracker
     /// </summary>
     public void CaptureWindows()
     {
+        var stopwatch = Stopwatch.StartNew();
         _savedWindows.Clear();
 
         NativeMethods.EnumWindows((hwnd, _) =>
@@ -38,6 +40,7 @@ public sealed class WindowTracker
         }, IntPtr.Zero);
 
         AppDiagnostics.Log($"Capture complete: {_savedWindows.Count} window(s) saved");
+        AppDiagnostics.Metric($"CaptureWindows: {_savedWindows.Count} window(s) in {stopwatch.ElapsedMilliseconds}ms");
     }
 
     /// <summary>
@@ -45,11 +48,14 @@ public sealed class WindowTracker
     /// </summary>
     public void MinimizeAll()
     {
+        var stopwatch = Stopwatch.StartNew();
         foreach (var window in _savedWindows)
         {
             AppDiagnostics.LogWindow("Minimizing window", window.Handle);
-            NativeMethods.ShowWindow(window.Handle, NativeMethods.SW_MINIMIZE);
+            NativeMethods.ShowWindowAsync(window.Handle, NativeMethods.SW_MINIMIZE);
         }
+
+        AppDiagnostics.Metric($"MinimizeAll: {_savedWindows.Count} window(s) in {stopwatch.ElapsedMilliseconds}ms");
     }
 
     /// <summary>
@@ -58,6 +64,9 @@ public sealed class WindowTracker
     /// </summary>
     public void RestoreAll()
     {
+        var stopwatch = Stopwatch.StartNew();
+        int restoredCount = 0;
+
         // Restore in reverse order (bottom windows first) to preserve Z-order
         for (int i = _savedWindows.Count - 1; i >= 0; i--)
         {
@@ -73,10 +82,12 @@ public sealed class WindowTracker
             var placement = info.Placement;
             AppDiagnostics.LogWindow("Restoring window", info.Handle);
             NativeMethods.SetWindowPlacement(info.Handle, ref placement);
+            restoredCount++;
         }
 
         _savedWindows.Clear();
         AppDiagnostics.Log("Restore list cleared");
+        AppDiagnostics.Metric($"RestoreAll: {restoredCount} window(s) in {stopwatch.ElapsedMilliseconds}ms");
     }
 
     /// <summary>

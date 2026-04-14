@@ -9,7 +9,6 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
     <Authors>Scott Hanselman</Authors>
     <Description>Click your desktop to peek at it — just like macOS Sonoma.</Description>
     <RepositoryUrl>https://github.com/shanselman/PeekDesktop</RepositoryUrl>
@@ -18,5 +17,9 @@
   <PropertyGroup Condition="'$(PublishAot)' == 'true'">
     <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Updatum" Version="1.2.1" />
+  </ItemGroup>
 
 </Project>

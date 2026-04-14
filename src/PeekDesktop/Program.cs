@@ -38,6 +38,7 @@ public sealed class PeekDesktopContext : ApplicationContext
 {
     private DesktopPeek? _desktopPeek;
     private TrayIcon? _trayIcon;
+    private AppUpdater? _appUpdater;
 
     public PeekDesktopContext()
     {
@@ -57,10 +58,22 @@ public sealed class PeekDesktopContext : ApplicationContext
     {
         var settings = Settings.Load();
         _desktopPeek = new DesktopPeek();
-        _trayIcon = new TrayIcon(_desktopPeek, settings, () => ExitThread());
+        _appUpdater = new AppUpdater();
+        _trayIcon = new TrayIcon(_desktopPeek, _appUpdater, settings, () => ExitThread());
 
         if (settings.Enabled)
             _desktopPeek.Start();
+
+        var updateTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+        updateTimer.Tick += async (_, _) =>
+        {
+            updateTimer.Stop();
+            updateTimer.Dispose();
+
+            if (_appUpdater is not null)
+                await _appUpdater.CheckForUpdatesAsync(interactive: false);
+        };
+        updateTimer.Start();
     }
 
     protected override void Dispose(bool disposing)

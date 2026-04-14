@@ -11,6 +11,8 @@ permissions:
 
 env:
   HAS_AZURE_SIGNING: ${{ secrets.AZURE_CLIENT_ID != '' && secrets.AZURE_CLIENT_SECRET != '' && secrets.AZURE_SUBSCRIPTION_ID != '' && secrets.AZURE_TENANT_ID != '' }}
+  TRUSTED_SIGNING_ACCOUNT: ${{ vars.AZURE_TRUSTED_SIGNING_ACCOUNT || 'hanselman' }}
+  TRUSTED_SIGNING_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME || 'WindowsEdgeLight' }}
 
 jobs:
   build:
@@ -36,7 +38,7 @@ jobs:
         if ('${{ github.ref_type }}' -eq 'tag') {
           $version = '${{ github.ref_name }}'.TrimStart('v')
         } else {
-          $version = "0.1.0-ci.${{ github.run_number }}"
+          $version = "0.0.0-ci.${{ github.run_number }}"
         }
 
         $numericVersion = ($version -split '-', 2)[0]
@@ -101,8 +103,8 @@ jobs:
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
         azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
         endpoint: https://wus2.codesigning.azure.net/
-        signing-account-name: hanselman
-        certificate-profile-name: WindowsEdgeLight
+        signing-account-name: ${{ env.TRUSTED_SIGNING_ACCOUNT }}
+        certificate-profile-name: ${{ env.TRUSTED_SIGNING_PROFILE }}
         files-folder: ${{ github.workspace }}\src\PeekDesktop\bin\Release\net10.0-windows
         files-folder-filter: exe
         files-folder-recurse: true

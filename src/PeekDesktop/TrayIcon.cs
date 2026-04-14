@@ -7,17 +7,19 @@ namespace PeekDesktop;
 /// <summary>
 /// Manages the system tray (notification area) icon and its context menu.
 /// </summary>
-public sealed class TrayIcon : IDisposable
+internal sealed class TrayIcon : IDisposable
 {
     private readonly NotifyIcon _notifyIcon;
     private readonly DesktopPeek _desktopPeek;
+    private readonly AppUpdater _appUpdater;
     private readonly Settings _settings;
     private readonly Action _exitAction;
     private readonly ToolStripMenuItem _enabledItem;
 
-    public TrayIcon(DesktopPeek desktopPeek, Settings settings, Action exitAction)
+    public TrayIcon(DesktopPeek desktopPeek, AppUpdater appUpdater, Settings settings, Action exitAction)
     {
         _desktopPeek = desktopPeek;
+        _appUpdater = appUpdater;
         _settings = settings;
         _exitAction = exitAction;
 
@@ -68,17 +70,21 @@ public sealed class TrayIcon : IDisposable
         var aboutItem = new ToolStripMenuItem("About PeekDesktop");
         aboutItem.Click += (_, _) =>
         {
-            string version = Application.ProductVersion;
+            string version = Application.ProductVersion.Split('+')[0];
             MessageBox.Show(
                 $"PeekDesktop v{version}\n\n" +
                 "Click your desktop wallpaper to peek at your desktop,\n" +
                 "just like macOS Sonoma.\n\n" +
-                "Click any window or the taskbar to restore.\n\n" +
+                "Click any window or the taskbar to restore.\n" +
+                "Updates come from GitHub Releases.\n\n" +
                 "github.com/shanselman/PeekDesktop",
                 "About PeekDesktop",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         };
+
+        var updatesItem = new ToolStripMenuItem("Check for Updates");
+        updatesItem.Click += async (_, _) => await _appUpdater.CheckForUpdatesAsync(interactive: true);
 
         var exitItem = new ToolStripMenuItem("Exit");
         exitItem.Click += (_, _) =>
@@ -91,6 +97,7 @@ public sealed class TrayIcon : IDisposable
         menu.Items.Add(startupItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(aboutItem);
+        menu.Items.Add(updatesItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
 
