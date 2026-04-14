@@ -4,8 +4,9 @@
 
 PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. Click empty wallpaper and all windows minimize. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
 
-<!-- ![PeekDesktop Demo](docs/demo.gif) -->
-<!-- TODO: Record demo GIF -->
+<p align="center">
+  <img src="img/demo.gif" alt="PeekDesktop demo showing windows minimizing when you click the wallpaper" width="900" />
+</p>
 
 ## Download
 
