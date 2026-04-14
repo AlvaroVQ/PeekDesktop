@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -467,7 +468,77 @@ internal static class NativeMethods
         return hr == 0;
     }
 
-    public static bool TryToggleDesktopWithWinD()
+    public static bool TryToggleDesktop()
+    {
+        if (TryToggleDesktopWithShell())
+        {
+            AppDiagnostics.Log("Show desktop activated via Shell.Application.ToggleDesktop");
+            return true;
+        }
+
+        if (TryToggleDesktopWithWinD())
+        {
+            AppDiagnostics.Log("Show desktop activated via Win+D input fallback");
+            return true;
+        }
+
+        AppDiagnostics.Log("Failed to toggle desktop using both shell and Win+D fallback");
+        return false;
+    }
+
+    private static bool TryToggleDesktopWithShell()
+    {
+        try
+        {
+            Type? shellType = Type.GetTypeFromProgID("Shell.Application");
+            if (shellType == null)
+            {
+                AppDiagnostics.Log("Shell.Application ProgID was not available");
+                return false;
+            }
+
+            object? shell = Activator.CreateInstance(shellType);
+            if (shell == null)
+            {
+                AppDiagnostics.Log("Shell.Application COM object could not be created");
+                return false;
+            }
+
+            try
+            {
+                shellType.InvokeMember("ToggleDesktop", BindingFlags.InvokeMethod, binder: null, target: shell, args: null);
+                return true;
+            }
+            finally
+            {
+                if (Marshal.IsComObject(shell))
+                    Marshal.FinalReleaseComObject(shell);
+            }
+        }
+        catch (NotSupportedException ex)
+        {
+            AppDiagnostics.Log($"Shell toggle desktop is unsupported in this runtime: {ex.Message}");
+            return false;
+        }
+        catch (COMException ex)
+        {
+            AppDiagnostics.Log($"Shell toggle desktop COM failure: 0x{ex.HResult:X}");
+            return false;
+        }
+        catch (MissingMethodException ex)
+        {
+            AppDiagnostics.Log($"Shell toggle desktop method was not found: {ex.Message}");
+            return false;
+        }
+        catch (TargetInvocationException ex)
+        {
+            string message = ex.InnerException?.Message ?? ex.Message;
+            AppDiagnostics.Log($"Shell toggle desktop invocation failed: {message}");
+            return false;
+        }
+    }
+
+    private static bool TryToggleDesktopWithWinD()
     {
         INPUT[] inputs =
         [

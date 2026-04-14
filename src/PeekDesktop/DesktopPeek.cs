@@ -164,18 +164,18 @@ public sealed class DesktopPeek : IDisposable
 
             if (_activePeekMode == PeekMode.NativeShowDesktop)
             {
-                if (NativeMethods.TryToggleDesktopWithWinD())
+                if (NativeMethods.TryToggleDesktop())
                 {
                     _windowTracker.ClearSavedWindows();
                     _nativeShellToggled = true;
                     _isPeeking = true;
                     _ignoreFocusUntil = Environment.TickCount64 + PostPeekFocusGracePeriodMs;
                     AppDiagnostics.Log($"Peek mode active; ignoring focus churn for {PostPeekFocusGracePeriodMs}ms");
-                    AppDiagnostics.Log("Win+D native show desktop activated");
+                    AppDiagnostics.Log("Native show desktop activated");
                     return;
                 }
 
-                AppDiagnostics.Log("Win+D native show desktop failed; falling back to classic minimize");
+                AppDiagnostics.Log("Native show desktop failed; falling back to classic minimize");
                 _activePeekMode = PeekMode.Minimize;
             }
 
@@ -219,7 +219,7 @@ public sealed class DesktopPeek : IDisposable
 
             if (_nativeShellToggled)
             {
-                NativeMethods.TryToggleDesktopWithWinD();
+                NativeMethods.TryToggleDesktop();
                 _windowTracker.ClearSavedWindows();
                 _nativeShellToggled = false;
             }

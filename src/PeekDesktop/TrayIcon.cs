@@ -86,7 +86,7 @@ internal sealed class TrayIcon : IDisposable
             Checked = _settings.PeekMode == PeekMode.FlyAway
         };
 
-        var nativeDesktopModeItem = new ToolStripMenuItem("Native Show Desktop (Win+D)")
+        var nativeDesktopModeItem = new ToolStripMenuItem("Native Show Desktop (Explorer)")
         {
             Checked = _settings.PeekMode == PeekMode.NativeShowDesktop
         };
@@ -129,7 +129,7 @@ internal sealed class TrayIcon : IDisposable
                 "just like macOS Sonoma.\n\n" +
                 "Click any window or the taskbar to restore.\n" +
                 "Peek Style lets you switch between classic minimize,\n" +
-                "fly-away, native show desktop, and cloak experiments.\n\n" +
+                "fly-away, Explorer show desktop, and cloak experiments.\n\n" +
                 "Updates come from GitHub Releases.\n\n" +
                 "github.com/shanselman/PeekDesktop",
                 "About PeekDesktop",
