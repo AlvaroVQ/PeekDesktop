@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace PeekDesktop;
 
@@ -16,11 +15,16 @@ internal sealed class AppUpdater
 
     private static readonly HttpClient HttpClient = CreateHttpClient();
 
-    private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
+    private readonly Win32MessageLoop? _messageLoop;
     private bool _isChecking;
     private string? _latestReleaseUrl;
 
     public event EventHandler<UpdateAvailableEventArgs>? UpdateAvailable;
+
+    public AppUpdater(Win32MessageLoop? messageLoop = null)
+    {
+        _messageLoop = messageLoop;
+    }
 
     public async Task CheckForUpdatesAsync(bool interactive)
     {
@@ -28,11 +32,11 @@ internal sealed class AppUpdater
         {
             if (interactive)
             {
-                MessageBox.Show(
+                NativeMethods.MessageBoxW(
+                    IntPtr.Zero,
                     "PeekDesktop is already checking for updates.",
                     "PeekDesktop Update",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
             }
 
             return;
@@ -58,11 +62,11 @@ internal sealed class AppUpdater
             {
                 if (interactive)
                 {
-                    MessageBox.Show(
+                    NativeMethods.MessageBoxW(
+                        IntPtr.Zero,
                         $"You're already on the latest version of PeekDesktop ({currentVersion}).",
                         "PeekDesktop Update",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                        NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
                 }
 
                 return;
@@ -74,13 +78,13 @@ internal sealed class AppUpdater
                 return;
             }
 
-            DialogResult result = MessageBox.Show(
+            int result = NativeMethods.MessageBoxW(
+                IntPtr.Zero,
                 $"PeekDesktop {latestVersion} is available.\n\nOpen the GitHub release page to download it?",
                 "Update Available",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Information);
+                NativeMethods.MB_YESNO | NativeMethods.MB_ICONINFORMATION);
 
-            if (result == DialogResult.Yes)
+            if (result == NativeMethods.IDYES)
                 OpenLatestReleasePage();
         }
         catch (Exception ex)
@@ -89,11 +93,11 @@ internal sealed class AppUpdater
 
             if (interactive)
             {
-                MessageBox.Show(
+                NativeMethods.MessageBoxW(
+                    IntPtr.Zero,
                     $"PeekDesktop couldn't check for updates.\n\n{ex.Message}",
                     "Update Error",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                    NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
             }
         }
         finally
@@ -116,13 +120,15 @@ internal sealed class AppUpdater
     {
         AppDiagnostics.Log($"Update available: version={version}, url={releaseUrl}");
 
-        if (_syncContext is not null)
+        void Raise() => UpdateAvailable?.Invoke(this, new UpdateAvailableEventArgs(version, releaseUrl));
+
+        if (_messageLoop is not null)
         {
-            _syncContext.Post(_ => UpdateAvailable?.Invoke(this, new UpdateAvailableEventArgs(version, releaseUrl)), null);
+            _messageLoop.BeginInvoke(Raise);
             return;
         }
 
-        UpdateAvailable?.Invoke(this, new UpdateAvailableEventArgs(version, releaseUrl));
+        Raise();
     }
 
     private static async Task<GitHubReleaseInfo?> GetLatestReleaseAsync()

@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Windows.Forms;
 
 namespace PeekDesktop;
 
@@ -238,16 +236,21 @@ public sealed class WindowTracker
 
     private static NativeMethods.RECT ComputeFlyAwayTarget(NativeMethods.RECT startBounds)
     {
-        Rectangle rectangle = Rectangle.FromLTRB(startBounds.Left, startBounds.Top, startBounds.Right, startBounds.Bottom);
-        Rectangle screenBounds = Screen.FromRectangle(rectangle).WorkingArea;
+        var monitorInfo = new NativeMethods.MONITORINFO { cbSize = (uint)Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        IntPtr hMonitor = NativeMethods.MonitorFromRect(ref startBounds, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        NativeMethods.GetMonitorInfoW(hMonitor, ref monitorInfo);
+        NativeMethods.RECT screenBounds = monitorInfo.rcWork;
 
         int width = Math.Max(1, startBounds.Right - startBounds.Left);
         int height = Math.Max(1, startBounds.Bottom - startBounds.Top);
         int centerX = startBounds.Left + (width / 2);
         int centerY = startBounds.Top + (height / 2);
 
-        bool moveLeft = centerX < screenBounds.Left + (screenBounds.Width / 2);
-        bool moveUp = centerY < screenBounds.Top + (screenBounds.Height / 2);
+        int screenWidth = screenBounds.Right - screenBounds.Left;
+        int screenHeight = screenBounds.Bottom - screenBounds.Top;
+
+        bool moveLeft = centerX < screenBounds.Left + (screenWidth / 2);
+        bool moveUp = centerY < screenBounds.Top + (screenHeight / 2);
 
         int targetLeft = moveLeft
             ? screenBounds.Left - width - OffscreenMargin

@@ -3,7 +3,6 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>PeekDesktop</AssemblyName>
     <RootNamespace>PeekDesktop</RootNamespace>
     <Nullable>enable</Nullable>
@@ -14,7 +13,16 @@
     <RepositoryUrl>https://github.com/shanselman/PeekDesktop</RepositoryUrl>
     <PublishAot>true</PublishAot>
     <OptimizationPreference>Size</OptimizationPreference>
-    <_SuppressWinFormsTrimError>true</_SuppressWinFormsTrimError>
+    <!-- Aggressive size reduction -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- VirtualDesktopService.cs is excluded under AOT because it relies on

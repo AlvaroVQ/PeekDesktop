@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Accessibility;
 
 namespace PeekDesktop;
 
@@ -86,6 +85,8 @@ internal static class NativeMethods
         int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+
+    public delegate IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
     #endregion
 
@@ -267,6 +268,38 @@ internal static class NativeMethods
 
     public const int SM_CXDOUBLECLK = 36;
     public const int SM_CYDOUBLECLK = 37;
+
+    // --- Monitor info ---
+    public const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT pt, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    // --- MessageBox ---
+    public const uint MB_OK = 0x00000000;
+    public const uint MB_YESNO = 0x00000004;
+    public const uint MB_ICONINFORMATION = 0x00000040;
+    public const uint MB_ICONERROR = 0x00000010;
+    public const int IDYES = 6;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int MessageBoxW(IntPtr hWnd, string lpText, string lpCaption, uint uType);
 
     #endregion
 
@@ -671,4 +704,21 @@ internal static class NativeMethods
     }
 
     #endregion
+}
+
+/// <summary>
+/// Minimal IAccessible COM interface (replaces the Accessibility NuGet package
+/// which depends on WinForms). Only the methods used by PeekDesktop are defined;
+/// all preceding vtable slots are placeholder stubs.
+/// </summary>
+[ComImport]
+[Guid("618736E0-3C3D-11CF-810C-00AA00389B71")]
+[InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
+internal interface IAccessible
+{
+    [DispId(unchecked((int)0xFFFFEC78))]
+    object? get_accRole(object childID);
+
+    [DispId(unchecked((int)0xFFFFEC76))]
+    string? get_accName(object childID);
 }

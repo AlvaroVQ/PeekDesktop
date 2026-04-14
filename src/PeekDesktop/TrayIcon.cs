@@ -1,204 +1,166 @@
 using System;
-using System.Drawing;
 using System.Reflection;
-using System.Windows.Forms;
 
 namespace PeekDesktop;
 
 /// <summary>
-/// Manages the system tray (notification area) icon and its context menu.
+/// Manages the system tray (notification area) icon and its context menu
+/// using raw Win32 APIs (no WinForms dependency).
 /// </summary>
 internal sealed class TrayIcon : IDisposable
 {
-    private readonly NotifyIcon _notifyIcon;
+    // Menu item IDs
+    private const uint ID_ENABLED = 1;
+    private const uint ID_STARTUP = 2;
+    private const uint ID_DOUBLECLICK = 3;
+    private const uint ID_MODE_MINIMIZE = 10;
+    private const uint ID_MODE_FLYAWAY = 11;
+    private const uint ID_MODE_NATIVE = 12;
+    private const uint ID_ABOUT = 20;
+    private const uint ID_UPDATES = 21;
+    private const uint ID_EXIT = 30;
+
+    private readonly Win32TrayIcon _trayIcon;
+    private readonly Win32MessageLoop _messageLoop;
     private readonly DesktopPeek _desktopPeek;
     private readonly AppUpdater _appUpdater;
     private readonly Settings _settings;
     private readonly Action _exitAction;
-    private readonly ToolStripMenuItem _enabledItem;
 
-    public TrayIcon(DesktopPeek desktopPeek, AppUpdater appUpdater, Settings settings, Action exitAction)
+    public TrayIcon(Win32MessageLoop messageLoop, DesktopPeek desktopPeek, AppUpdater appUpdater, Settings settings, Action exitAction)
     {
+        _messageLoop = messageLoop;
         _desktopPeek = desktopPeek;
         _appUpdater = appUpdater;
         _settings = settings;
         _exitAction = exitAction;
 
-        _enabledItem = new ToolStripMenuItem("Enabled")
-        {
-            Checked = _settings.Enabled,
-            CheckOnClick = true
-        };
+        _trayIcon = new Win32TrayIcon(messageLoop.Handle);
+        IntPtr hIcon = Win32Icon.CreateTrayIcon();
+        _trayIcon.Add(hIcon, "PeekDesktop \u2014 click desktop to peek");
 
-        _notifyIcon = new NotifyIcon
-        {
-            Text = "PeekDesktop — click desktop to peek",
-            Icon = CreateIcon(),
-            Visible = true,
-            ContextMenuStrip = CreateContextMenu()
-        };
+        _messageLoop.MessageReceived += OnMessage;
+        _messageLoop.TaskbarCreated += OnTaskbarCreated;
 
-        _notifyIcon.BalloonTipClicked += (_, _) => _appUpdater.OpenLatestReleasePage();
         _appUpdater.UpdateAvailable += (_, e) =>
         {
-            _notifyIcon.BalloonTipTitle = "PeekDesktop Update Available";
-            _notifyIcon.BalloonTipText = $"Version {e.Version} is available. Click here to open the download page.";
-            _notifyIcon.ShowBalloonTip(5000);
+            _trayIcon.ShowBalloon(
+                "PeekDesktop Update Available",
+                $"Version {e.Version} is available. Click here to open the download page.");
         };
     }
 
-    private ContextMenuStrip CreateContextMenu()
+    private void OnTaskbarCreated()
     {
-        var menu = new ContextMenuStrip();
+        AppDiagnostics.Log("Re-adding tray icon after Explorer restart");
+        IntPtr hIcon = Win32Icon.CreateTrayIcon();
+        _trayIcon.Add(hIcon, "PeekDesktop \u2014 click desktop to peek");
+    }
 
-        _enabledItem.CheckedChanged += (_, _) =>
+    private (bool handled, IntPtr result) OnMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (msg == Win32TrayIcon.WM_TRAYICON)
         {
-            _settings.Enabled = _enabledItem.Checked;
-            _desktopPeek.IsEnabled = _enabledItem.Checked;
+            if (Win32TrayIcon.IsRightClick(lParam))
+            {
+                ShowContextMenu();
+                return (true, IntPtr.Zero);
+            }
 
-            if (_enabledItem.Checked)
-                _desktopPeek.Start();
-            else
-                _desktopPeek.Stop();
-
-            _settings.Save();
-        };
-
-        var startupItem = new ToolStripMenuItem("Start with Windows")
-        {
-            Checked = _settings.StartWithWindows,
-            CheckOnClick = true
-        };
-        startupItem.CheckedChanged += (_, _) =>
-        {
-            _settings.StartWithWindows = startupItem.Checked;
-            _settings.Save();
-            Settings.SetAutoStart(startupItem.Checked);
-        };
-
-        var doubleClickItem = new ToolStripMenuItem("Require Double-Click")
-        {
-            Checked = _settings.RequireDoubleClick,
-            CheckOnClick = true
-        };
-        doubleClickItem.CheckedChanged += (_, _) =>
-        {
-            _settings.RequireDoubleClick = doubleClickItem.Checked;
-            _desktopPeek.SetRequireDoubleClick(doubleClickItem.Checked);
-            _settings.Save();
-        };
-
-        var classicModeItem= new ToolStripMenuItem("Classic Minimize")
-        {
-            Checked = _settings.PeekMode == PeekMode.Minimize
-        };
-
-        var flyAwayModeItem = new ToolStripMenuItem("Fly Away (Experimental)")
-        {
-            Checked = _settings.PeekMode == PeekMode.FlyAway
-        };
-
-        var nativeDesktopModeItem = new ToolStripMenuItem("Native Show Desktop (Explorer)")
-        {
-            Checked = _settings.PeekMode == PeekMode.NativeShowDesktop
-        };
-
-        void SetPeekMode(PeekMode peekMode)
-        {
-            _settings.PeekMode = peekMode;
-            _desktopPeek.SetPeekMode(peekMode);
-            classicModeItem.Checked = peekMode == PeekMode.Minimize;
-            flyAwayModeItem.Checked = peekMode == PeekMode.FlyAway;
-            nativeDesktopModeItem.Checked = peekMode == PeekMode.NativeShowDesktop;
-            _notifyIcon.Text = $"PeekDesktop - {GetPeekModeDisplayName(peekMode)}";
-            _settings.Save();
+            if (Win32TrayIcon.IsBalloonClick(lParam))
+            {
+                _appUpdater.OpenLatestReleasePage();
+                return (true, IntPtr.Zero);
+            }
         }
 
-        classicModeItem.Click += (_, _) => SetPeekMode(PeekMode.Minimize);
-        flyAwayModeItem.Click += (_, _) => SetPeekMode(PeekMode.FlyAway);
-        nativeDesktopModeItem.Click += (_, _) => SetPeekMode(PeekMode.NativeShowDesktop);
-
-        var peekStyleMenu= new ToolStripMenuItem("Peek Style");
-        peekStyleMenu.DropDownItems.Add(classicModeItem);
-        peekStyleMenu.DropDownItems.Add(flyAwayModeItem);
-        peekStyleMenu.DropDownItems.Add(nativeDesktopModeItem);
-
-        var aboutItem = new ToolStripMenuItem("About PeekDesktop");
-        aboutItem.Click += (_, _) =>
-        {
-            string version = GetDisplayVersion();
-            MessageBox.Show(
-                $"PeekDesktop v{version}\n\n" +
-                "Click your desktop wallpaper to peek at your desktop,\n" +
-                "just like macOS Sonoma.\n\n" +
-                "Click any window or the taskbar to restore.\n" +
-                "Peek Style lets you switch between classic minimize,\n" +
-                "fly-away, and Explorer show desktop.\n\n" +
-                "Updates come from GitHub Releases.\n\n" +
-                "github.com/shanselman/PeekDesktop",
-                "About PeekDesktop",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-        };
-
-        var updatesItem = new ToolStripMenuItem("Check for Updates");
-        updatesItem.Click += async (_, _) => await _appUpdater.CheckForUpdatesAsync(interactive: true);
-
-        var exitItem = new ToolStripMenuItem("Exit");
-        exitItem.Click += (_, _) =>
-        {
-            _notifyIcon.Visible = false;
-            _exitAction();
-        };
-
-        menu.Items.Add(_enabledItem);
-        menu.Items.Add(startupItem);
-        menu.Items.Add(doubleClickItem);
-        menu.Items.Add(peekStyleMenu);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(aboutItem);
-        menu.Items.Add(updatesItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(exitItem);
-
-        return menu;
+        return (false, IntPtr.Zero);
     }
 
-    /// <summary>
-    /// Creates a simple programmatic icon (blue monitor with white stand).
-    /// Replace with a proper .ico in production.
-    /// </summary>
-    private static Icon CreateIcon()
+    private void ShowContextMenu()
     {
-        var bitmap = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bitmap))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
+        using var menu = new Win32Menu();
 
-            // Monitor screen
-            using var screenBrush = new SolidBrush(Color.FromArgb(30, 144, 255));
-            g.FillRectangle(screenBrush, 3, 3, 26, 18);
+        menu.AddItem(ID_ENABLED, "Enabled", ToggleEnabled, _settings.Enabled);
+        menu.AddItem(ID_STARTUP, "Start with Windows", ToggleStartup, _settings.StartWithWindows);
+        menu.AddItem(ID_DOUBLECLICK, "Require Double-Click", ToggleDoubleClick, _settings.RequireDoubleClick);
+        menu.AddSeparator();
+        menu.AddItem(ID_MODE_MINIMIZE, "Classic Minimize", () => SetPeekMode(PeekMode.Minimize), _settings.PeekMode == PeekMode.Minimize);
+        menu.AddItem(ID_MODE_FLYAWAY, "Fly Away (Experimental)", () => SetPeekMode(PeekMode.FlyAway), _settings.PeekMode == PeekMode.FlyAway);
+        menu.AddItem(ID_MODE_NATIVE, "Native Show Desktop (Explorer)", () => SetPeekMode(PeekMode.NativeShowDesktop), _settings.PeekMode == PeekMode.NativeShowDesktop);
+        menu.AddSeparator();
+        menu.AddItem(ID_ABOUT, "About PeekDesktop", ShowAbout);
+        menu.AddItem(ID_UPDATES, "Check for Updates", CheckForUpdates);
+        menu.AddSeparator();
+        menu.AddItem(ID_EXIT, "Exit", DoExit);
 
-            // Monitor bezel
-            using var bezelPen = new Pen(Color.White, 1.5f);
-            g.DrawRectangle(bezelPen, 3, 3, 26, 18);
-
-            // Stand
-            g.FillRectangle(Brushes.White, 13, 21, 6, 4);
-            g.FillRectangle(Brushes.White, 10, 25, 12, 2);
-
-            // "Peek" eye on the screen
-            using var eyePen = new Pen(Color.White, 1.5f);
-            g.DrawEllipse(eyePen, 10, 8, 12, 8);
-            g.FillEllipse(Brushes.White, 14, 10, 4, 4);
-        }
-
-        IntPtr hIcon = bitmap.GetHicon();
-        return Icon.FromHandle(hIcon);
+        menu.Show(_messageLoop.Handle);
     }
 
-    private static string GetDisplayVersion()
+    private void ToggleEnabled()
+    {
+        _settings.Enabled = !_settings.Enabled;
+        _desktopPeek.IsEnabled = _settings.Enabled;
+
+        if (_settings.Enabled)
+            _desktopPeek.Start();
+        else
+            _desktopPeek.Stop();
+
+        _settings.Save();
+    }
+
+    private void ToggleStartup()
+    {
+        _settings.StartWithWindows = !_settings.StartWithWindows;
+        _settings.Save();
+        Settings.SetAutoStart(_settings.StartWithWindows);
+    }
+
+    private void ToggleDoubleClick()
+    {
+        _settings.RequireDoubleClick = !_settings.RequireDoubleClick;
+        _desktopPeek.SetRequireDoubleClick(_settings.RequireDoubleClick);
+        _settings.Save();
+    }
+
+    private void SetPeekMode(PeekMode peekMode)
+    {
+        _settings.PeekMode = peekMode;
+        _desktopPeek.SetPeekMode(peekMode);
+        _trayIcon.UpdateTooltip($"PeekDesktop - {GetPeekModeDisplayName(peekMode)}");
+        _settings.Save();
+    }
+
+    private void ShowAbout()
+    {
+        string version = GetDisplayVersion();
+        NativeMethods.MessageBoxW(
+            IntPtr.Zero,
+            $"PeekDesktop v{version}\n\n" +
+            "Click your desktop wallpaper to peek at your desktop,\n" +
+            "just like macOS Sonoma.\n\n" +
+            "Click any window or the taskbar to restore.\n" +
+            "Peek Style lets you switch between classic minimize,\n" +
+            "fly-away, and Explorer show desktop.\n\n" +
+            "Updates come from GitHub Releases.\n\n" +
+            "github.com/shanselman/PeekDesktop",
+            "About PeekDesktop",
+            NativeMethods.MB_OK | NativeMethods.MB_ICONINFORMATION);
+    }
+
+    private async void CheckForUpdates()
+    {
+        await _appUpdater.CheckForUpdatesAsync(interactive: true);
+    }
+
+    private void DoExit()
+    {
+        _trayIcon.Remove();
+        _exitAction();
+    }
+
+    internal static string GetDisplayVersion()
     {
         Assembly assembly = typeof(Program).Assembly;
         string? version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -224,7 +186,6 @@ internal sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
-        _notifyIcon.Visible = false;
-        _notifyIcon.Dispose();
+        _trayIcon.Dispose();
     }
 }
