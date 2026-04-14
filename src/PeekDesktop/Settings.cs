@@ -31,9 +31,9 @@ public sealed class Settings
                 return JsonSerializer.Deserialize(json, PeekDesktopJsonContext.Default.Settings) ?? new Settings();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Fall through to defaults
+            AppDiagnostics.Log($"Failed to load settings from {SettingsPath}: {ex.Message}");
         }
         return new Settings();
     }
@@ -46,9 +46,9 @@ public sealed class Settings
             string json = JsonSerializer.Serialize(this, PeekDesktopJsonContext.Default.Settings);
             File.WriteAllText(SettingsPath, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort persistence
+            AppDiagnostics.Log($"Failed to save settings to {SettingsPath}: {ex.Message}");
         }
     }
 

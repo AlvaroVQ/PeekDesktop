@@ -37,6 +37,31 @@ public sealed class DesktopPeek : IDisposable
         _focusWatcher.FocusChanged += OnFocusChanged;
     }
 
+    public void SetPeekMode(PeekMode peekMode)
+    {
+        bool modeChanged = PeekMode != peekMode;
+        PeekMode = peekMode;
+
+        if (modeChanged)
+        {
+            AppDiagnostics.Log($"Peek mode changed to {peekMode}. IsPeeking={_isPeeking} Transitioning={_isTransitioning}");
+        }
+        else
+        {
+            AppDiagnostics.Log($"Peek mode reaffirmed as {peekMode}. IsPeeking={_isPeeking} ActiveMode={_activePeekMode}");
+        }
+
+        if (!_isPeeking || _isTransitioning || !IsEnabled)
+            return;
+
+        if (!modeChanged && _activePeekMode == peekMode)
+            return;
+
+        AppDiagnostics.Log("Applying newly selected peek mode immediately");
+        RestoreWindows();
+        PeekDesktopNow();
+    }
+
     public void Start()
     {
         AppDiagnostics.Log($"Start requested. Enabled={IsEnabled}");

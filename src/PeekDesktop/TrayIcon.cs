@@ -99,11 +99,12 @@ internal sealed class TrayIcon : IDisposable
         void SetPeekMode(PeekMode peekMode)
         {
             _settings.PeekMode = peekMode;
-            _desktopPeek.PeekMode = peekMode;
+            _desktopPeek.SetPeekMode(peekMode);
             classicModeItem.Checked = peekMode == PeekMode.Minimize;
             flyAwayModeItem.Checked = peekMode == PeekMode.FlyAway;
             nativeDesktopModeItem.Checked = peekMode == PeekMode.NativeShowDesktop;
             cloakModeItem.Checked = peekMode == PeekMode.Cloak;
+            _notifyIcon.Text = $"PeekDesktop - {GetPeekModeDisplayName(peekMode)}";
             _settings.Save();
         }
 
@@ -203,6 +204,18 @@ internal sealed class TrayIcon : IDisposable
 
         int plusIndex = version.IndexOf('+');
         return plusIndex >= 0 ? version[..plusIndex] : version;
+    }
+
+    private static string GetPeekModeDisplayName(PeekMode peekMode)
+    {
+        return peekMode switch
+        {
+            PeekMode.Minimize => "Classic Minimize",
+            PeekMode.FlyAway => "Fly Away",
+            PeekMode.NativeShowDesktop => "Native Show Desktop",
+            PeekMode.Cloak => "Cloak",
+            _ => "Peek"
+        };
     }
 
     public void Dispose()
