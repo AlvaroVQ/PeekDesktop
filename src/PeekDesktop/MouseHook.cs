@@ -18,6 +18,15 @@ public sealed class MouseHook : IDisposable
     private NativeMethods.LowLevelMouseProc? _hookProc;
     private SynchronizationContext? _syncContext;
 
+    // Double-click detection state (low-level hooks never see WM_LBUTTONDBLCLK)
+    private long _lastClickTick;
+    private NativeMethods.POINT _lastClickPoint;
+
+    /// <summary>
+    /// When true, only double-clicks trigger desktop peek (single clicks are ignored).
+    /// </summary>
+    public bool RequireDoubleClick { get; set; }
+
     /// <summary>
     /// Raised (on the UI thread) when a left-click on empty desktop wallpaper is detected.
     /// </summary>
@@ -69,6 +78,31 @@ public sealed class MouseHook : IDisposable
         {
             var hookStruct = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
             var clickPoint = hookStruct.pt;
+
+            if (RequireDoubleClick)
+            {
+                long now = Environment.TickCount64;
+                uint doubleClickTime = NativeMethods.GetDoubleClickTime();
+                int cxThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXDOUBLECLK) / 2;
+                int cyThreshold = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYDOUBLECLK) / 2;
+
+                bool withinTime = (now - _lastClickTick) <= doubleClickTime;
+                bool withinDistance = Math.Abs(clickPoint.x - _lastClickPoint.x) <= cxThreshold
+                                  && Math.Abs(clickPoint.y - _lastClickPoint.y) <= cyThreshold;
+
+                _lastClickTick = now;
+                _lastClickPoint = clickPoint;
+
+                if (!(withinTime && withinDistance))
+                {
+                    // First click of a potential double-click — swallow it
+                    return NativeMethods.CallNextHookEx(_hookId, nCode, wParam, lParam);
+                }
+
+                // Reset so a third click doesn't also fire
+                _lastClickTick = 0;
+            }
+
             IntPtr windowUnderCursor = NativeMethods.WindowFromPoint(clickPoint);
 
             if (_syncContext is not null)

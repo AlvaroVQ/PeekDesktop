@@ -17,15 +17,12 @@ public sealed class DesktopPeek : IDisposable
     private readonly MouseHook _mouseHook = new();
     private readonly FocusWatcher _focusWatcher = new();
     private readonly WindowTracker _windowTracker = new();
-    private readonly VirtualDesktopService _virtualDesktopService = new();
 
     private bool _isPeeking;
     private bool _isTransitioning; // suppresses events during minimize/restore
     private bool _nativeShellToggled;
-    private bool _virtualDesktopToggled;
     private long _ignoreFocusUntil;
     private long _ignoreRestoreClickUntil;
-    private Guid _originalDesktopId;
     private PeekMode _activePeekMode = PeekMode.Minimize;
 
     public bool IsEnabled { get; set; } = true;
@@ -35,11 +32,18 @@ public sealed class DesktopPeek : IDisposable
     public DesktopPeek(Settings settings)
     {
         PeekMode = NormalizePeekMode(settings.PeekMode);
+        _mouseHook.RequireDoubleClick = settings.RequireDoubleClick;
         AppDiagnostics.Log("DesktopPeek created");
         _mouseHook.DesktopClicked += OnDesktopClicked;
         _mouseHook.DesktopIconClicked += OnDesktopIconClicked;
         _mouseHook.NonDesktopClicked += OnNonDesktopClicked;
         _focusWatcher.FocusChanged += OnFocusChanged;
+    }
+
+    public void SetRequireDoubleClick(bool requireDoubleClick)
+    {
+        _mouseHook.RequireDoubleClick = requireDoubleClick;
+        AppDiagnostics.Log($"RequireDoubleClick set to {requireDoubleClick}");
     }
 
     public void SetPeekMode(PeekMode peekMode)
@@ -212,27 +216,6 @@ public sealed class DesktopPeek : IDisposable
         {
             _activePeekMode = PeekMode;
             _nativeShellToggled = false;
-            _virtualDesktopToggled = false;
-
-            if (_activePeekMode == PeekMode.VirtualDesktop)
-            {
-                if (_virtualDesktopService.TryEnterPeekDesktop(out Guid originalDesktopId))
-                {
-                    _windowTracker.ClearSavedWindows();
-                    _originalDesktopId = originalDesktopId;
-                    _virtualDesktopToggled = true;
-                    _isPeeking = true;
-                    _ignoreFocusUntil = Environment.TickCount64 + PostPeekFocusGracePeriodMs;
-                    _ignoreRestoreClickUntil = Environment.TickCount64 + PostPeekRestoreClickGracePeriodMs;
-                    AppDiagnostics.Log($"Peek mode active; ignoring focus churn for {PostPeekFocusGracePeriodMs}ms");
-                    AppDiagnostics.Log($"Peek mode active; ignoring restore clicks for {PostPeekRestoreClickGracePeriodMs}ms");
-                    AppDiagnostics.Log($"Virtual desktop peek activated; original desktop={originalDesktopId}");
-                    return;
-                }
-
-                AppDiagnostics.Log("Virtual desktop peek failed; falling back to Explorer show desktop");
-                _activePeekMode = PeekMode.NativeShowDesktop;
-            }
 
             if (_activePeekMode == PeekMode.NativeShowDesktop)
             {
@@ -294,21 +277,11 @@ public sealed class DesktopPeek : IDisposable
             _ignoreFocusUntil = 0;
             _ignoreRestoreClickUntil = 0;
 
-            if (_virtualDesktopToggled)
-            {
-                if (!_virtualDesktopService.TryRestoreDesktop(_originalDesktopId))
-                    AppDiagnostics.Log($"Virtual desktop restore failed for {_originalDesktopId}");
-
-                _windowTracker.ClearSavedWindows();
-                _virtualDesktopToggled = false;
-                _originalDesktopId = Guid.Empty;
-            }
-            else if (_nativeShellToggled)
+            if (_nativeShellToggled)
             {
                 NativeMethods.TryToggleDesktop();
                 _windowTracker.ClearSavedWindows();
                 _nativeShellToggled = false;
-                _originalDesktopId = Guid.Empty;
             }
             else
             {
@@ -332,7 +305,6 @@ public sealed class DesktopPeek : IDisposable
         Stop();
         _mouseHook.Dispose();
         _focusWatcher.Dispose();
-        _virtualDesktopService.Dispose();
     }
 
     private static bool IsOwnedByCurrentProcess(IntPtr hwnd)

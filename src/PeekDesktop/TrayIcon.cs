@@ -76,7 +76,19 @@ internal sealed class TrayIcon : IDisposable
             Settings.SetAutoStart(startupItem.Checked);
         };
 
-        var classicModeItem = new ToolStripMenuItem("Classic Minimize")
+        var doubleClickItem = new ToolStripMenuItem("Require Double-Click")
+        {
+            Checked = _settings.RequireDoubleClick,
+            CheckOnClick = true
+        };
+        doubleClickItem.CheckedChanged += (_, _) =>
+        {
+            _settings.RequireDoubleClick = doubleClickItem.Checked;
+            _desktopPeek.SetRequireDoubleClick(doubleClickItem.Checked);
+            _settings.Save();
+        };
+
+        var classicModeItem= new ToolStripMenuItem("Classic Minimize")
         {
             Checked = _settings.PeekMode == PeekMode.Minimize
         };
@@ -91,11 +103,6 @@ internal sealed class TrayIcon : IDisposable
             Checked = _settings.PeekMode == PeekMode.NativeShowDesktop
         };
 
-        var virtualDesktopModeItem = new ToolStripMenuItem("Virtual Desktop (Experimental)")
-        {
-            Checked = _settings.PeekMode == PeekMode.VirtualDesktop
-        };
-
         void SetPeekMode(PeekMode peekMode)
         {
             _settings.PeekMode = peekMode;
@@ -103,7 +110,6 @@ internal sealed class TrayIcon : IDisposable
             classicModeItem.Checked = peekMode == PeekMode.Minimize;
             flyAwayModeItem.Checked = peekMode == PeekMode.FlyAway;
             nativeDesktopModeItem.Checked = peekMode == PeekMode.NativeShowDesktop;
-            virtualDesktopModeItem.Checked = peekMode == PeekMode.VirtualDesktop;
             _notifyIcon.Text = $"PeekDesktop - {GetPeekModeDisplayName(peekMode)}";
             _settings.Save();
         }
@@ -111,13 +117,11 @@ internal sealed class TrayIcon : IDisposable
         classicModeItem.Click += (_, _) => SetPeekMode(PeekMode.Minimize);
         flyAwayModeItem.Click += (_, _) => SetPeekMode(PeekMode.FlyAway);
         nativeDesktopModeItem.Click += (_, _) => SetPeekMode(PeekMode.NativeShowDesktop);
-        virtualDesktopModeItem.Click += (_, _) => SetPeekMode(PeekMode.VirtualDesktop);
 
-        var peekStyleMenu = new ToolStripMenuItem("Peek Style");
+        var peekStyleMenu= new ToolStripMenuItem("Peek Style");
         peekStyleMenu.DropDownItems.Add(classicModeItem);
         peekStyleMenu.DropDownItems.Add(flyAwayModeItem);
         peekStyleMenu.DropDownItems.Add(nativeDesktopModeItem);
-        peekStyleMenu.DropDownItems.Add(virtualDesktopModeItem);
 
         var aboutItem = new ToolStripMenuItem("About PeekDesktop");
         aboutItem.Click += (_, _) =>
@@ -129,8 +133,7 @@ internal sealed class TrayIcon : IDisposable
                 "just like macOS Sonoma.\n\n" +
                 "Click any window or the taskbar to restore.\n" +
                 "Peek Style lets you switch between classic minimize,\n" +
-                "fly-away, Explorer show desktop, and an\n" +
-                "experimental virtual desktop shell switch.\n\n" +
+                "fly-away, and Explorer show desktop.\n\n" +
                 "Updates come from GitHub Releases.\n\n" +
                 "github.com/shanselman/PeekDesktop",
                 "About PeekDesktop",
@@ -150,6 +153,7 @@ internal sealed class TrayIcon : IDisposable
 
         menu.Items.Add(_enabledItem);
         menu.Items.Add(startupItem);
+        menu.Items.Add(doubleClickItem);
         menu.Items.Add(peekStyleMenu);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(aboutItem);
@@ -214,7 +218,6 @@ internal sealed class TrayIcon : IDisposable
             PeekMode.Minimize => "Classic Minimize",
             PeekMode.FlyAway => "Fly Away",
             PeekMode.NativeShowDesktop => "Native Show Desktop",
-            PeekMode.VirtualDesktop => "Virtual Desktop",
             _ => "Peek"
         };
     }

@@ -19,6 +19,7 @@ public sealed class Settings
 
     public bool Enabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
+    public bool RequireDoubleClick { get; set; } = false;
     public PeekMode PeekMode { get; set; } = PeekMode.NativeShowDesktop;
 
     public static Settings Load()
@@ -68,8 +69,8 @@ public sealed class Settings
             PeekMode.Minimize => PeekMode.Minimize,
             PeekMode.FlyAway => PeekMode.FlyAway,
             PeekMode.NativeShowDesktop => PeekMode.NativeShowDesktop,
-            PeekMode.VirtualDesktop => PeekMode.VirtualDesktop,
             (PeekMode)3 => PeekMode.NativeShowDesktop, // legacy Cloak setting
+            PeekMode.VirtualDesktop => PeekMode.NativeShowDesktop, // removed; migrate
             _ => PeekMode.NativeShowDesktop
         };
     }
