@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 
 namespace PeekDesktop;
 
@@ -13,6 +16,16 @@ public sealed class DesktopPeek : IDisposable
 {
     private const int PostPeekFocusGracePeriodMs = 200;
     private const int PostPeekRestoreClickGracePeriodMs = 300;
+    private static readonly HashSet<string> KnownGamingProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "steam",
+        "steamwebhelper",
+        "steamgameoverlayui",
+        "xboxpcapp",
+        "gamebar",
+        "gamebarftserver",
+        "gamebarpresencewriter"
+    };
 
     private readonly MouseHook _mouseHook = new();
     private readonly FocusWatcher _focusWatcher = new();
@@ -21,8 +34,11 @@ public sealed class DesktopPeek : IDisposable
     private bool _isPeeking;
     private bool _isTransitioning; // suppresses events during minimize/restore
     private bool _nativeShellToggled;
+    private bool _pauseWhileFullscreenAppActive;
+    private bool _isSuppressedForGaming;
     private long _ignoreFocusUntil;
     private long _ignoreRestoreClickUntil;
+    private string _gameSuppressionReason = string.Empty;
     private PeekMode _activePeekMode = PeekMode.Minimize;
 
     public bool IsEnabled { get; set; } = true;
@@ -33,6 +49,7 @@ public sealed class DesktopPeek : IDisposable
     {
         PeekMode = NormalizePeekMode(settings.PeekMode);
         _mouseHook.RequireDoubleClick = settings.RequireDoubleClick;
+        _pauseWhileFullscreenAppActive = settings.PauseWhileFullscreenAppActive;
         AppDiagnostics.Log("DesktopPeek created");
         _mouseHook.DesktopClicked += OnDesktopClicked;
         _mouseHook.DesktopIconClicked += OnDesktopIconClicked;
@@ -44,6 +61,26 @@ public sealed class DesktopPeek : IDisposable
     {
         _mouseHook.RequireDoubleClick = requireDoubleClick;
         AppDiagnostics.Log($"RequireDoubleClick set to {requireDoubleClick}");
+    }
+
+    public void SetPauseWhileFullscreenAppActive(bool enabled)
+    {
+        _pauseWhileFullscreenAppActive = enabled;
+        AppDiagnostics.Log($"PauseWhileFullscreenAppActive set to {enabled}");
+
+        if (!enabled)
+        {
+            if (_isSuppressedForGaming)
+            {
+                _isSuppressedForGaming = false;
+                _gameSuppressionReason = string.Empty;
+                AppDiagnostics.Log("Gaming suppression cleared");
+            }
+
+            return;
+        }
+
+        UpdateGamingSuppressionState(NativeMethods.GetForegroundWindow());
     }
 
     public void SetPeekMode(PeekMode peekMode)
@@ -84,6 +121,7 @@ public sealed class DesktopPeek : IDisposable
         AppDiagnostics.Log($"Start requested. Enabled={IsEnabled}");
         _mouseHook.Install();
         _focusWatcher.Start();
+        UpdateGamingSuppressionState(NativeMethods.GetForegroundWindow());
     }
 
     public void Stop()
@@ -101,6 +139,12 @@ public sealed class DesktopPeek : IDisposable
         if (!IsEnabled || _isTransitioning)
         {
             AppDiagnostics.Log($"Desktop click ignored. Enabled={IsEnabled} IsPeeking={_isPeeking} Transitioning={_isTransitioning}");
+            return;
+        }
+
+        if (_isSuppressedForGaming)
+        {
+            AppDiagnostics.Log($"Desktop click ignored because gaming protection is active ({_gameSuppressionReason})");
             return;
         }
 
@@ -164,6 +208,8 @@ public sealed class DesktopPeek : IDisposable
 
     private void OnFocusChanged(object? sender, FocusChangedEventArgs e)
     {
+        UpdateGamingSuppressionState(e.ForegroundWindow);
+
         if (!_isPeeking || _isTransitioning)
             return;
 
@@ -314,5 +360,103 @@ public sealed class DesktopPeek : IDisposable
 
         _ = NativeMethods.GetWindowThreadProcessId(hwnd, out uint processId);
         return processId == (uint)Environment.ProcessId;
+    }
+
+    private void UpdateGamingSuppressionState(IntPtr foregroundWindow)
+    {
+        bool shouldSuppress = ShouldSuppressForGaming(foregroundWindow, out string reason);
+        if (_isSuppressedForGaming == shouldSuppress && string.Equals(_gameSuppressionReason, reason, StringComparison.Ordinal))
+            return;
+
+        if (shouldSuppress)
+            AppDiagnostics.Log($"Gaming protection active ({reason}); desktop peek is paused");
+        else if (_isSuppressedForGaming)
+            AppDiagnostics.Log("Gaming protection inactive; desktop peek resumed");
+
+        _isSuppressedForGaming = shouldSuppress;
+        _gameSuppressionReason = reason;
+    }
+
+    private bool ShouldSuppressForGaming(IntPtr foregroundWindow, out string reason)
+    {
+        reason = string.Empty;
+
+        if (!_pauseWhileFullscreenAppActive)
+            return false;
+
+        if (foregroundWindow == IntPtr.Zero || !NativeMethods.IsWindow(foregroundWindow))
+            return false;
+
+        if (IsOwnedByCurrentProcess(foregroundWindow) || DesktopDetector.IsDesktopWindow(foregroundWindow))
+            return false;
+
+        if (NativeMethods.TryGetUserNotificationState(out NativeMethods.UserNotificationState notificationState)
+            && notificationState == NativeMethods.UserNotificationState.RunningD3DFullScreen)
+        {
+            reason = "running-d3d-full-screen";
+            return true;
+        }
+
+        if (!IsWindowFullscreen(foregroundWindow))
+            return false;
+
+        if (TryGetForegroundProcessName(foregroundWindow, out string processName) && KnownGamingProcesses.Contains(processName))
+        {
+            reason = $"gaming-process:{processName}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsWindowFullscreen(IntPtr hwnd)
+    {
+        if (!NativeMethods.GetWindowRect(hwnd, out NativeMethods.RECT windowRect))
+            return false;
+
+        IntPtr monitor = NativeMethods.MonitorFromRect(ref windowRect, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero)
+            return false;
+
+        var monitorInfo = new NativeMethods.MONITORINFO
+        {
+            cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>()
+        };
+
+        if (!NativeMethods.GetMonitorInfoW(monitor, ref monitorInfo))
+            return false;
+
+        const int tolerance = 2;
+        return Math.Abs(windowRect.Left - monitorInfo.rcMonitor.Left) <= tolerance
+            && Math.Abs(windowRect.Top - monitorInfo.rcMonitor.Top) <= tolerance
+            && Math.Abs(windowRect.Right - monitorInfo.rcMonitor.Right) <= tolerance
+            && Math.Abs(windowRect.Bottom - monitorInfo.rcMonitor.Bottom) <= tolerance;
+    }
+
+    private static bool TryGetForegroundProcessName(IntPtr foregroundWindow, out string processName)
+    {
+        processName = string.Empty;
+        _ = NativeMethods.GetWindowThreadProcessId(foregroundWindow, out uint processId);
+        if (processId == 0 || processId > int.MaxValue)
+            return false;
+
+        try
+        {
+            using Process process = Process.GetProcessById((int)processId);
+            processName = process.ProcessName;
+            return !string.IsNullOrWhiteSpace(processName);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (Win32Exception)
+        {
+            return false;
+        }
     }
 }

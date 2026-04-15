@@ -63,19 +63,16 @@ Right-click the tray icon for options:
 
 - ✅ **Enabled** — toggle the peek feature on/off
 - 🔁 **Start with Windows** — launch automatically at login
+- 🎮 **Pause While Gaming / Full-Screen** — on by default for exclusive full-screen and known gaming fullscreen apps
 - 👀 **Peek Style** — switch between Explorer, minimize, fly-away, and virtual desktop modes
 - ℹ️ **About** — version info
 - ⬇️ **Check for Updates** — see if a newer version is out and open the download page
 - ❌ **Exit** — quit PeekDesktop
 
-## What's New in v0.4.5
+## What's New in v0.7.0
 
-- **Explorer Show Desktop is now the default**
-- **Live peek-style switching** from the tray menu
-- **Virtual Desktop (Experimental)** as a fourth option
-- **Self-contained non-AOT release packaging** for better compatibility while the experimental shell path settles
-- **Native Show Desktop reliability fix** by correcting Win+D input interop (with shell fallback still available)
-- **Cleaner diagnostics output** so DebugView and file logs no longer emit duplicate lines
+- **Smaller Native AOT binary** via `PublishAotCompressed` (x64 test output dropped from ~2.32 MB to ~0.99 MB)
+- **Pause While Gaming / Full-Screen** option (enabled by default) to avoid desktop-peek interference during gaming sessions
 
 ## macOS Sonoma vs PeekDesktop
 

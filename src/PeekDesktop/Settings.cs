@@ -20,6 +20,7 @@ public sealed class Settings
     public bool Enabled { get; set; } = true;
     public bool StartWithWindows { get; set; } = false;
     public bool RequireDoubleClick { get; set; } = false;
+    public bool PauseWhileFullscreenAppActive { get; set; } = true;
     public PeekMode PeekMode { get; set; } = PeekMode.NativeShowDesktop;
 
     public static Settings Load()

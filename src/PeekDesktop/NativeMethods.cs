@@ -59,6 +59,18 @@ internal static class NativeMethods
     // --- MSAA accessible roles ---
     public const int ROLE_SYSTEM_LISTITEM = 0x22;
 
+    // --- Shell notification state ---
+    public enum UserNotificationState
+    {
+        NotPresent = 1,
+        Busy = 2,
+        RunningD3DFullScreen = 3,
+        PresentationMode = 4,
+        AcceptsNotifications = 5,
+        QuietTime = 6,
+        App = 7
+    }
+
     // --- ListView hit testing ---
     private const int LVM_FIRST = 0x1000;
     private const int LVM_HITTEST = LVM_FIRST + 18;
@@ -436,6 +448,9 @@ internal static class NativeMethods
     [DllImport("api-ms-win-core-winrt-string-l1-1-0.dll", CallingConvention = CallingConvention.StdCall)]
     public static extern int WindowsDeleteString(IntPtr hstring);
 
+    [DllImport("shell32.dll")]
+    private static extern int SHQueryUserNotificationState(out UserNotificationState pquns);
+
     #endregion
 
     #region Helpers
@@ -579,6 +594,16 @@ internal static class NativeMethods
     {
         int hr = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int));
         return hr == 0 && cloaked != 0;
+    }
+
+    public static bool TryGetUserNotificationState(out UserNotificationState state)
+    {
+        int hr = SHQueryUserNotificationState(out state);
+        if (hr == 0)
+            return true;
+
+        state = UserNotificationState.AcceptsNotifications;
+        return false;
     }
 
     public static bool TryToggleDesktop()

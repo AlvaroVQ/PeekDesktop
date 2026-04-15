@@ -31,5 +31,8 @@
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <Compile Remove="VirtualDesktopService.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="PublishAotCompressed" Version="1.0.5" />
+  </ItemGroup>
 
 </Project>
