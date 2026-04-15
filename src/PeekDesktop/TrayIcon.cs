@@ -134,9 +134,9 @@ internal sealed class TrayIcon : IDisposable
 
     private void SetPeekMode(PeekMode peekMode)
     {
-        _settings.PeekMode = peekMode;
         _desktopPeek.SetPeekMode(peekMode);
-        _trayIcon.UpdateTooltip($"PeekDesktop - {GetPeekModeDisplayName(peekMode)}");
+        _settings.PeekMode = _desktopPeek.PeekMode;
+        _trayIcon.UpdateTooltip($"PeekDesktop - {GetPeekModeDisplayName(_settings.PeekMode)}");
         _settings.Save();
     }
 

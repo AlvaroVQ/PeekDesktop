@@ -111,9 +111,13 @@ public sealed class DesktopPeek : IDisposable
 
     private static PeekMode NormalizePeekMode(PeekMode peekMode)
     {
-        return Enum.IsDefined(typeof(PeekMode), peekMode)
-            ? peekMode
-            : PeekMode.NativeShowDesktop;
+        return peekMode switch
+        {
+            PeekMode.Minimize => PeekMode.Minimize,
+            PeekMode.FlyAway => PeekMode.NativeShowDesktop,
+            PeekMode.NativeShowDesktop => PeekMode.NativeShowDesktop,
+            _ => PeekMode.NativeShowDesktop
+        };
     }
 
     public void Start()
