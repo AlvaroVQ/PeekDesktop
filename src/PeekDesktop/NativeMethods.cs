@@ -402,6 +402,9 @@ internal static class NativeMethods
         IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam,
         uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(
         IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
@@ -606,14 +609,42 @@ internal static class NativeMethods
 
     public static bool TryToggleDesktop()
     {
+        if (TryToggleDesktopWithTaskbarButton())
+        {
+            AppDiagnostics.Log("Show desktop activated via taskbar button");
+            return true;
+        }
+
         if (TryToggleDesktopWithWinD())
         {
             AppDiagnostics.Log("Show desktop activated via Win+D input");
             return true;
         }
 
-        AppDiagnostics.Log("Failed to toggle desktop via Win+D");
+        AppDiagnostics.Log("Failed to toggle desktop via taskbar button and Win+D");
         return false;
+    }
+
+    private const uint BM_CLICK = 0x00F5;
+
+    private static bool TryToggleDesktopWithTaskbarButton()
+    {
+        IntPtr hTray = FindWindow("Shell_TrayWnd", null);
+        if (hTray == IntPtr.Zero)
+        {
+            AppDiagnostics.Log("Taskbar window (Shell_TrayWnd) not found");
+            return false;
+        }
+
+        IntPtr hButton = FindWindowEx(hTray, IntPtr.Zero, "TrayShowDesktopButtonWClass", null);
+        if (hButton == IntPtr.Zero)
+        {
+            AppDiagnostics.Log("Show Desktop button (TrayShowDesktopButtonWClass) not found");
+            return false;
+        }
+
+        SendMessageW(hButton, BM_CLICK, IntPtr.Zero, IntPtr.Zero);
+        return true;
     }
 
     private static bool TryToggleDesktopWithWinD()
