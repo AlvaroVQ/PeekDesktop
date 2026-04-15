@@ -117,7 +117,7 @@ dotnet publish src/PeekDesktop/PeekDesktop.csproj -c Release -r win-arm64 --self
 
 ### Release packaging
 
-For now, the recommended shipping format is **self-contained single-file** publish output rather than Native AOT. That keeps the experimental virtual desktop mode working reliably while still producing an easy download-and-run app.
+For now, the recommended shipping format is **self-contained single-file** publish output rather than Native AOT. That keeps COM/reflection-heavy shell integrations (experimental virtual desktop mode and `Shell.Application.ToggleDesktop`) working reliably while still producing an easy download-and-run app.
 
 ## Architecture
 

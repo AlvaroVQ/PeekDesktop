@@ -57,6 +57,8 @@ internal static class NativeMethods
     private const uint KEYEVENTF_KEYUP = 0x0002;
     private const ushort VK_LWIN = 0x5B;
     private const ushort VK_D = 0x44;
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicMethods)]
+    private static readonly Type? ShellApplicationType = GetShellApplicationType();
 
     // --- MSAA accessible roles ---
     public const int ROLE_SYSTEM_LISTITEM = 0x22;
@@ -626,7 +628,7 @@ internal static class NativeMethods
 
     private static bool TryToggleDesktopWithShellApplication()
     {
-        Type? shellType = GetShellApplicationType();
+        Type? shellType = ShellApplicationType;
         if (shellType is null)
         {
             AppDiagnostics.Log("Shell.Application ProgID was unavailable");
@@ -660,12 +662,17 @@ internal static class NativeMethods
         }
         catch (TargetException ex)
         {
-            AppDiagnostics.Log($"Shell.Application.ToggleDesktop target failure: 0x{ex.HResult:X8}");
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop invocation target error: 0x{ex.HResult:X8}");
             return false;
         }
         catch (TargetInvocationException ex)
         {
-            AppDiagnostics.Log($"Shell.Application.ToggleDesktop invoke failure: 0x{ex.HResult:X8}");
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop method execution error: 0x{ex.HResult:X8}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop unexpected failure: 0x{ex.HResult:X8}");
             return false;
         }
         finally
@@ -675,7 +682,7 @@ internal static class NativeMethods
         }
     }
 
-    [UnconditionalSuppressMessage("Trimming", "IL2073", Justification = "Shell.Application COM automation is resolved by Explorer at runtime.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2073", Justification = "Shell.Application COM automation type is resolved by Explorer at runtime.")]
     [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicMethods)]
     private static Type? GetShellApplicationType()
     {
