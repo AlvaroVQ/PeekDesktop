@@ -244,8 +244,8 @@ This is the implementation the project should treat as the default ship path.
 
 `NativeMethods.TryToggleDesktop()` attempts two mechanisms in order:
 
-1. **Preferred:** synthesize **Win+D** with `SendInput`
-2. **Fallback:** `Shell.Application.ToggleDesktop`
+1. **Preferred:** call `Shell.Application.ToggleDesktop` (Explorer-native toggle, unaffected by Win+D remapping)
+2. **Fallback:** synthesize **Win+D** with `SendInput`
 
 ### Recent native-show-desktop regression and fix
 
@@ -285,8 +285,8 @@ It is also architecturally cleaner:
 
 This area deserves nuance:
 
-- **`SendInput` / Win+D path** - official Win32 input API, but still synthetic input
-- **`Shell.Application` COM automation fallback** - publicly accessible shell automation surface and practical to use, but it is still effectively delegating to Explorer-owned behavior rather than a dedicated modern SDK API
+- **`Shell.Application` COM automation path** - publicly accessible shell automation surface and practical to use, but it is still effectively delegating to Explorer-owned behavior rather than a dedicated modern SDK API
+- **`SendInput` / Win+D fallback** - official Win32 input API, but still synthetic input
 
 That makes it a good fit for a utility like PeekDesktop: it is close to the platform's native behavior without forcing the app to manually re-implement the shell.
 

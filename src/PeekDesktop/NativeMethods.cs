@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Text;
 
 namespace PeekDesktop;
@@ -606,14 +608,78 @@ internal static class NativeMethods
 
     public static bool TryToggleDesktop()
     {
+        if (TryToggleDesktopWithShellApplication())
+        {
+            AppDiagnostics.Log("Show desktop activated via Shell.Application.ToggleDesktop");
+            return true;
+        }
+
         if (TryToggleDesktopWithWinD())
         {
             AppDiagnostics.Log("Show desktop activated via Win+D input");
             return true;
         }
 
-        AppDiagnostics.Log("Failed to toggle desktop via Win+D");
+        AppDiagnostics.Log("Failed to toggle desktop via Shell.Application and Win+D");
         return false;
+    }
+
+    private static bool TryToggleDesktopWithShellApplication()
+    {
+        Type? shellType = GetShellApplicationType();
+        if (shellType is null)
+        {
+            AppDiagnostics.Log("Shell.Application ProgID was unavailable");
+            return false;
+        }
+
+        object? shell = null;
+        try
+        {
+            shell = Activator.CreateInstance(shellType);
+            if (shell is null)
+            {
+                AppDiagnostics.Log("Failed to create Shell.Application COM instance");
+                return false;
+            }
+
+            MethodInfo? toggleDesktopMethod = shellType.GetMethod("ToggleDesktop");
+            if (toggleDesktopMethod is null)
+            {
+                AppDiagnostics.Log("Shell.Application.ToggleDesktop method not found");
+                return false;
+            }
+
+            _ = toggleDesktopMethod.Invoke(shell, parameters: null);
+            return true;
+        }
+        catch (COMException ex)
+        {
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop COM failure: 0x{ex.HResult:X8}");
+            return false;
+        }
+        catch (TargetException ex)
+        {
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop target failure: 0x{ex.HResult:X8}");
+            return false;
+        }
+        catch (TargetInvocationException ex)
+        {
+            AppDiagnostics.Log($"Shell.Application.ToggleDesktop invoke failure: 0x{ex.HResult:X8}");
+            return false;
+        }
+        finally
+        {
+            if (shell is not null && Marshal.IsComObject(shell))
+                _ = Marshal.ReleaseComObject(shell);
+        }
+    }
+
+    [UnconditionalSuppressMessage("Trimming", "IL2073", Justification = "Shell.Application COM automation is resolved by Explorer at runtime.")]
+    [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicMethods)]
+    private static Type? GetShellApplicationType()
+    {
+        return Type.GetTypeFromProgID("Shell.Application");
     }
 
     private static bool TryToggleDesktopWithWinD()
