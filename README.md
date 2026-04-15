@@ -114,7 +114,7 @@ dotnet publish src/PeekDesktop/PeekDesktop.csproj -c Release -r win-arm64 --self
 
 ### Release packaging
 
-Release builds use **.NET Native AOT** — the exe is a fully native binary with no .NET runtime dependency. The x64 build is further compressed with [PublishAotCompressed](https://github.com/AustinWise/PublishAotCompressed) (UPX) for a final download under 1 MB.
+Release builds use **.NET Native AOT** — the exe is a fully native binary with no .NET runtime dependency. The x64 build is further compressed with [PublishAotCompressed](https://github.com/MichalStrehovsky/PublishAotCompressed) (UPX) for a final download under 1 MB.
 
 ## Architecture
 
