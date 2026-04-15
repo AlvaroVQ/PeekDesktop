@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 
 namespace PeekDesktop;
 
@@ -171,9 +170,8 @@ internal sealed class TrayIcon : IDisposable
 
     internal static string GetDisplayVersion()
     {
-        Assembly assembly = typeof(Program).Assembly;
-        string? version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-            ?? assembly.GetName().Version?.ToString();
+        var (productVersion, fileVersion) = NativeMethods.GetExeVersionInfo();
+        string? version = productVersion ?? fileVersion?.ToString();
 
         if (string.IsNullOrWhiteSpace(version))
             return "unknown";

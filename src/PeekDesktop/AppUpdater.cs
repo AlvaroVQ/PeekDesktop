@@ -1,7 +1,6 @@
 using System;
-using System.Diagnostics;
-using System.Reflection;
-using System.Text.Json.Serialization;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -106,11 +105,7 @@ internal sealed class AppUpdater
     public void OpenLatestReleasePage()
     {
         string url = _latestReleaseUrl ?? ReleasesPageUrl;
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = url,
-            UseShellExecute = true
-        });
+        NativeMethods.ShellExecuteW(IntPtr.Zero, "open", url, null, null, NativeMethods.SW_SHOWNORMAL);
     }
 
     private void RaiseUpdateAvailable(string version, string releaseUrl)
@@ -134,22 +129,54 @@ internal sealed class AppUpdater
         string json = await Task.Run(() =>
             WinHttp.Get(LatestReleaseApiUrl, "PeekDesktop", timeoutSeconds: 10));
 
-        return System.Text.Json.JsonSerializer.Deserialize(
-            json,
-            PeekDesktopJsonContext.Default.GitHubReleaseInfo);
+        return DeserializeReleaseInfo(Encoding.UTF8.GetBytes(json));
+    }
+
+    private static GitHubReleaseInfo DeserializeReleaseInfo(ReadOnlySpan<byte> utf8Json)
+    {
+        var info = new GitHubReleaseInfo();
+        var reader = new Utf8JsonReader(utf8Json);
+
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            return info;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+                break;
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+                continue;
+
+            if (reader.ValueTextEquals("tag_name"u8))
+            {
+                reader.Read();
+                info.TagName = reader.GetString() ?? string.Empty;
+            }
+            else if (reader.ValueTextEquals("html_url"u8))
+            {
+                reader.Read();
+                info.HtmlUrl = reader.GetString() ?? string.Empty;
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        return info;
     }
 
     private static string GetCurrentVersion()
     {
-        var assembly = typeof(Program).Assembly;
-        Version? assemblyVersion = assembly.GetName().Version;
-        string? informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var (productVersion, fileVersion) = NativeMethods.GetExeVersionInfo();
+        string? informationalVersion = productVersion;
         string rawVersion;
 
         if (!string.IsNullOrWhiteSpace(informationalVersion))
         {
             string normalizedInformational = NormalizeVersion(informationalVersion);
-            string normalizedAssembly = assemblyVersion is null ? string.Empty : NormalizeVersion(assemblyVersion.ToString());
+            string normalizedAssembly = fileVersion is null ? string.Empty : NormalizeVersion(fileVersion.ToString());
             string numericInformational = ExtractNumericPrefix(normalizedInformational);
             string numericAssembly = ExtractNumericPrefix(normalizedAssembly);
 
@@ -161,9 +188,9 @@ internal sealed class AppUpdater
         }
         else
         {
-            rawVersion = assemblyVersion is null || assemblyVersion == new Version(1, 0, 0, 0)
+            rawVersion = fileVersion is null || fileVersion == new Version(1, 0, 0, 0)
                 ? "0.0.0-dev"
-                : assemblyVersion.ToString();
+                : fileVersion.ToString();
         }
 
         return NormalizeVersion(rawVersion);
@@ -216,9 +243,6 @@ internal sealed class UpdateAvailableEventArgs : EventArgs
 
 internal sealed class GitHubReleaseInfo
 {
-    [JsonPropertyName("tag_name")]
     public string TagName { get; set; } = string.Empty;
-
-    [JsonPropertyName("html_url")]
     public string HtmlUrl { get; set; } = string.Empty;
 }
