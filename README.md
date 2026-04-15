@@ -137,17 +137,6 @@ src/PeekDesktop/
 └── NativeMethods.cs       # Win32 P/Invoke declarations
 ```
 
-### State Machine
-
-```
-┌──────┐  empty wallpaper click   ┌─────────┐
-│ Idle │ ───────────────→ │ Peeking │
-│      │ ←─────────────── │         │
-└──────┘  app click / taskbar      └─────────┘
-          click / wallpaper click
-          to restore
-```
-
 ## Contributing
 
 PRs welcome! Current status and next ideas:
