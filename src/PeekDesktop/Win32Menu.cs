@@ -119,13 +119,16 @@ internal sealed class Win32Menu : IDisposable
 
     private static class DarkModeMenuSupport
     {
+        // These uxtheme ordinals are undocumented and may vary across future
+        // Windows builds; all lookups are optional and this feature degrades
+        // to the default (light) menu if any entry point is unavailable.
         private const int UXTHEME_ORDINAL_SHOULD_APPS_USE_DARK_MODE = 132;
         private const int UXTHEME_ORDINAL_ALLOW_DARK_MODE_FOR_WINDOW = 133;
         private const int UXTHEME_ORDINAL_SET_PREFERRED_APP_MODE = 135;
         private const int UXTHEME_ORDINAL_FLUSH_MENU_THEMES = 136;
         private const int PREFERRED_APP_MODE_ALLOW_DARK = 1;
 
-        private static readonly object s_initLock = new();
+        private static readonly object s_initLock = new object();
         private static bool s_initialized;
         private static ShouldAppsUseDarkModeDelegate? s_shouldAppsUseDarkMode;
         private static AllowDarkModeForWindowDelegate? s_allowDarkModeForWindow;
@@ -158,9 +161,6 @@ internal sealed class Win32Menu : IDisposable
                     return;
 
                 IntPtr hUxTheme = GetModuleHandleW("uxtheme.dll");
-                if (hUxTheme == IntPtr.Zero)
-                    hUxTheme = LoadLibraryW("uxtheme.dll");
-
                 if (hUxTheme != IntPtr.Zero)
                 {
                     s_shouldAppsUseDarkMode = GetDelegate<ShouldAppsUseDarkModeDelegate>(hUxTheme, UXTHEME_ORDINAL_SHOULD_APPS_USE_DARK_MODE);
@@ -193,9 +193,6 @@ internal sealed class Win32Menu : IDisposable
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern IntPtr GetModuleHandleW(string? lpModuleName);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern IntPtr LoadLibraryW(string lpLibFileName);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr GetProcAddress(IntPtr hModule, IntPtr lpProcName);
