@@ -18,7 +18,6 @@
     <StackTraceSupport>false</StackTraceSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <PublishLzmaCompressed>true</PublishLzmaCompressed>
   </PropertyGroup>
 
   <!-- VirtualDesktopService.cs is excluded under AOT because it relies on
@@ -26,15 +25,6 @@
        does not support. The file is kept in the repo for future reference. -->
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <Compile Remove="VirtualDesktopService.cs" />
-  </ItemGroup>
-
-  <!-- UPX/LZMA compression does not currently support win-arm64 -->
-  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-arm64'">
-    <PublishLzmaCompressed>false</PublishLzmaCompressed>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="PublishAotCompressed" Version="1.0.5" />
   </ItemGroup>
 
 </Project>
