@@ -9,7 +9,7 @@ namespace PeekDesktop;
 /// Core orchestrator for the peek-desktop feature.
 /// State machine with two states: Idle and Peeking.
 ///
-///   Idle → Peeking:  user clicks empty desktop wallpaper
+///   Idle → Peeking:  user clicks empty desktop wallpaper or empty taskbar area
 ///   Peeking → Idle:  a non-desktop window gains foreground focus
 /// </summary>
 public sealed class DesktopPeek : IDisposable

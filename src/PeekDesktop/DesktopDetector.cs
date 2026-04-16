@@ -21,6 +21,12 @@ public static class DesktopDetector
     /// </summary>
     internal static DesktopClickTarget GetClickTarget(IntPtr hwnd, NativeMethods.POINT point)
     {
+        if (IsTaskbarBlankAreaWindow(hwnd))
+        {
+            AppDiagnostics.Log("Taskbar blank-area click detected");
+            return DesktopClickTarget.DesktopBackground;
+        }
+
         if (!IsDesktopRelatedWindow(hwnd))
         {
             AppDiagnostics.Log($"Desktop relationship check failed at {NativeMethods.DescribePoint(point)}");
@@ -150,5 +156,12 @@ public static class DesktopDetector
         }
 
         return false;
+    }
+
+    private static bool IsTaskbarBlankAreaWindow(IntPtr hwnd)
+    {
+        string className = NativeMethods.GetWindowClassName(hwnd);
+        return string.Equals(className, "Shell_TrayWnd", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(className, "Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase);
     }
 }

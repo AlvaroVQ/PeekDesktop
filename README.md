@@ -1,6 +1,6 @@
 # PeekDesktop 👀
 
-**Click empty desktop wallpaper to reveal your desktop — just like macOS Sonoma.**
+**Click empty desktop wallpaper (or blank taskbar area) to reveal your desktop — just like macOS Sonoma.**
 
 PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. By default it uses Explorer's native **Show Desktop** behavior, and it also includes optional **Classic Minimize** and **Fly Away** peek styles from the tray menu. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
 
@@ -25,7 +25,7 @@ No installer needed. Download the zip, extract it, and run `PeekDesktop.exe`. Re
 
 ## How It Works
 
-1. **Click empty desktop wallpaper** (not an icon) -> your desktop is revealed
+1. **Click empty desktop wallpaper or blank taskbar area** (not an icon or taskbar button) -> your desktop is revealed
 2. **Stay on the desktop** -> click or drag icons, right-click, and rearrange things while windows stay hidden
 3. **Click any app, the taskbar, or empty wallpaper again** -> all windows restore to exactly where they were
 
