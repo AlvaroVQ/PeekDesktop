@@ -43,6 +43,7 @@ internal sealed class Win32Menu : IDisposable
     /// </summary>
     public void Show(IntPtr hwnd)
     {
+        DarkModeMenuSupport.TryApply(hwnd);
         GetCursorPos(out NativeMethods.POINT pt);
 
         // Required for tray menus: the window must be foreground for the
@@ -115,4 +116,88 @@ internal sealed class Win32Menu : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    private static class DarkModeMenuSupport
+    {
+        private const int UXTHEME_ORDINAL_SHOULD_APPS_USE_DARK_MODE = 132;
+        private const int UXTHEME_ORDINAL_ALLOW_DARK_MODE_FOR_WINDOW = 133;
+        private const int UXTHEME_ORDINAL_SET_PREFERRED_APP_MODE = 135;
+        private const int UXTHEME_ORDINAL_FLUSH_MENU_THEMES = 136;
+        private const int PREFERRED_APP_MODE_ALLOW_DARK = 1;
+
+        private static readonly object s_initLock = new();
+        private static bool s_initialized;
+        private static ShouldAppsUseDarkModeDelegate? s_shouldAppsUseDarkMode;
+        private static AllowDarkModeForWindowDelegate? s_allowDarkModeForWindow;
+        private static SetPreferredAppModeDelegate? s_setPreferredAppMode;
+        private static FlushMenuThemesDelegate? s_flushMenuThemes;
+
+        public static void TryApply(IntPtr hwnd)
+        {
+            EnsureInitialized();
+
+            if (s_shouldAppsUseDarkMode is null || s_setPreferredAppMode is null || s_flushMenuThemes is null)
+                return;
+
+            if (!s_shouldAppsUseDarkMode())
+                return;
+
+            s_setPreferredAppMode(PREFERRED_APP_MODE_ALLOW_DARK);
+            s_allowDarkModeForWindow?.Invoke(hwnd, true);
+            s_flushMenuThemes();
+        }
+
+        private static void EnsureInitialized()
+        {
+            if (s_initialized)
+                return;
+
+            lock (s_initLock)
+            {
+                if (s_initialized)
+                    return;
+
+                IntPtr hUxTheme = GetModuleHandleW("uxtheme.dll");
+                if (hUxTheme == IntPtr.Zero)
+                    hUxTheme = LoadLibraryW("uxtheme.dll");
+
+                if (hUxTheme != IntPtr.Zero)
+                {
+                    s_shouldAppsUseDarkMode = GetDelegate<ShouldAppsUseDarkModeDelegate>(hUxTheme, UXTHEME_ORDINAL_SHOULD_APPS_USE_DARK_MODE);
+                    s_allowDarkModeForWindow = GetDelegate<AllowDarkModeForWindowDelegate>(hUxTheme, UXTHEME_ORDINAL_ALLOW_DARK_MODE_FOR_WINDOW);
+                    s_setPreferredAppMode = GetDelegate<SetPreferredAppModeDelegate>(hUxTheme, UXTHEME_ORDINAL_SET_PREFERRED_APP_MODE);
+                    s_flushMenuThemes = GetDelegate<FlushMenuThemesDelegate>(hUxTheme, UXTHEME_ORDINAL_FLUSH_MENU_THEMES);
+                }
+
+                s_initialized = true;
+            }
+        }
+
+        private static T? GetDelegate<T>(IntPtr module, int ordinal) where T : class
+        {
+            IntPtr proc = GetProcAddress(module, (IntPtr)ordinal);
+            return proc == IntPtr.Zero ? null : Marshal.GetDelegateForFunctionPointer<T>(proc);
+        }
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool ShouldAppsUseDarkModeDelegate();
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate bool AllowDarkModeForWindowDelegate(IntPtr hWnd, bool allow);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SetPreferredAppModeDelegate(int appMode);
+
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate void FlushMenuThemesDelegate();
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr GetModuleHandleW(string? lpModuleName);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibraryW(string lpLibFileName);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr GetProcAddress(IntPtr hModule, IntPtr lpProcName);
+    }
 }
