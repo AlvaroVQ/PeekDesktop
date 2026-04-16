@@ -17,12 +17,8 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <StackTraceSupport>false</StackTraceSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
-    <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
-    <EventSourceSupport>false</EventSourceSupport>
-    <DebuggerSupport>false</DebuggerSupport>
-    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
-    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishLzmaCompressed>true</PublishLzmaCompressed>
   </PropertyGroup>
 
   <!-- VirtualDesktopService.cs is excluded under AOT because it relies on
@@ -32,9 +28,9 @@
     <Compile Remove="VirtualDesktopService.cs" />
   </ItemGroup>
 
-  <!-- UPX in PublishAotCompressed does not currently support win-arm64. -->
+  <!-- UPX/LZMA compression does not currently support win-arm64 -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-arm64'">
-    <PublishAotCompressed>false</PublishAotCompressed>
+    <PublishLzmaCompressed>false</PublishLzmaCompressed>
   </PropertyGroup>
 
   <ItemGroup>
