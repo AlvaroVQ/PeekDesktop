@@ -8,6 +8,8 @@ namespace PeekDesktop;
 /// </summary>
 internal sealed class TrayIcon : IDisposable
 {
+    private const uint TrayRetryDelayMs = 1000;
+
     // Menu item IDs
     private const uint ID_ENABLED = 1;
     private const uint ID_STARTUP = 2;
@@ -37,8 +39,7 @@ internal sealed class TrayIcon : IDisposable
         _exitAction = exitAction;
 
         _trayIcon = new Win32TrayIcon(messageLoop.Handle);
-        IntPtr hIcon = Win32Icon.CreateTrayIcon();
-        _trayIcon.Add(hIcon, "PeekDesktop \u2014 click desktop to peek");
+        TryAddTrayIcon(scheduleRetryOnFailure: true);
 
         _messageLoop.MessageReceived += OnMessage;
         _messageLoop.TaskbarCreated += OnTaskbarCreated;
@@ -54,8 +55,20 @@ internal sealed class TrayIcon : IDisposable
     private void OnTaskbarCreated()
     {
         AppDiagnostics.Log("Re-adding tray icon after Explorer restart");
+        TryAddTrayIcon(scheduleRetryOnFailure: true);
+    }
+
+    private void TryAddTrayIcon(bool scheduleRetryOnFailure)
+    {
         IntPtr hIcon = Win32Icon.CreateTrayIcon();
-        _trayIcon.Add(hIcon, "PeekDesktop \u2014 click desktop to peek");
+        if (_trayIcon.Add(hIcon, "PeekDesktop \u2014 click desktop to peek"))
+            return;
+
+        if (!scheduleRetryOnFailure)
+            return;
+
+        AppDiagnostics.Log("Tray icon add failed; scheduling one retry");
+        _messageLoop.PostDeferredAction(TrayRetryDelayMs, () => TryAddTrayIcon(scheduleRetryOnFailure: false));
     }
 
     private (bool handled, IntPtr result) OnMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)

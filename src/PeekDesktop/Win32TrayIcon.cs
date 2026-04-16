@@ -23,8 +23,14 @@ internal sealed class Win32TrayIcon : IDisposable
     /// <summary>
     /// Adds the tray icon with the given tooltip and icon handle.
     /// </summary>
-    public void Add(IntPtr hIcon, string tooltip)
+    public bool Add(IntPtr hIcon, string tooltip)
     {
+        if (_added)
+            Remove();
+
+        if (_hIcon != IntPtr.Zero && _hIcon != hIcon)
+            DestroyIcon(_hIcon);
+
         _hIcon = hIcon;
         var nid = MakeNid();
         nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
@@ -32,14 +38,24 @@ internal sealed class Win32TrayIcon : IDisposable
         nid.hIcon = hIcon;
         nid.szTip = tooltip;
 
-        Shell_NotifyIconW(NIM_ADD, ref nid);
+        if (!Shell_NotifyIconW(NIM_ADD, ref nid))
+        {
+            AppDiagnostics.Log($"Shell_NotifyIconW(NIM_ADD) failed: {Marshal.GetLastWin32Error()}");
+            _added = false;
+            return false;
+        }
 
         // Request version 4 behavior in a separate call
         var versionNid = MakeNid();
         versionNid.uVersion = NOTIFYICON_VERSION_4;
-        Shell_NotifyIconW(NIM_SETVERSION, ref versionNid);
+        if (!Shell_NotifyIconW(NIM_SETVERSION, ref versionNid))
+        {
+            AppDiagnostics.Log($"Shell_NotifyIconW(NIM_SETVERSION) failed: {Marshal.GetLastWin32Error()}");
+        }
 
         _added = true;
+        AppDiagnostics.Log("Tray icon added");
+        return true;
     }
 
     public void UpdateTooltip(string tooltip)
@@ -68,6 +84,7 @@ internal sealed class Win32TrayIcon : IDisposable
         var nid = MakeNid();
         Shell_NotifyIconW(NIM_DELETE, ref nid);
         _added = false;
+        AppDiagnostics.Log("Tray icon removed");
     }
 
     public void Dispose()

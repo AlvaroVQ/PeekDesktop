@@ -413,12 +413,6 @@ internal static class NativeMethods
     private static extern int DwmGetWindowAttribute(
         IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 
-    [DllImport("oleacc.dll")]
-    private static extern int AccessibleObjectFromPoint(
-        POINT pt,
-        [Out, MarshalAs(UnmanagedType.Interface)] out IAccessible? accessibleObject,
-        [Out, MarshalAs(UnmanagedType.Struct)] out object? child);
-
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenProcess(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwProcessId);
 
@@ -524,53 +518,10 @@ internal static class NativeMethods
         role = 0;
         name = string.Empty;
 
-        if (!RuntimeFeature.IsDynamicCodeSupported)
-        {
-            AppDiagnostics.Log("Accessible hit-testing is unavailable in Native AOT; skipping desktop icon COM probe.");
-            return false;
-        }
-
-        int hr;
-        IAccessible? accessibleObject;
-        object? child;
-
-        try
-        {
-            hr = AccessibleObjectFromPoint(point, out accessibleObject, out child);
-        }
-        catch (NotSupportedException ex)
-        {
-            AppDiagnostics.Log($"AccessibleObjectFromPoint is unsupported in this runtime: {ex.Message}");
-            return false;
-        }
-
-        if (hr < 0 || accessibleObject == null)
-            return false;
-
-        object childReference = child ?? 0;
-
-        try
-        {
-            object? roleValue = accessibleObject.get_accRole(childReference);
-            if (roleValue != null)
-                role = Convert.ToInt32(roleValue);
-        }
-        catch (COMException ex)
-        {
-            AppDiagnostics.Log($"Accessible role lookup failed: 0x{ex.HResult:X}");
-            return false;
-        }
-
-        try
-        {
-            name = accessibleObject.get_accName(childReference) ?? string.Empty;
-        }
-        catch (COMException ex)
-        {
-            AppDiagnostics.Log($"Accessible name lookup failed: 0x{ex.HResult:X}");
-        }
-
-        return true;
+        // The source-generated UI Automation path is being developed separately.
+        // Keep the shipping baseline behavior stable until that integration is complete.
+        AppDiagnostics.Log("Accessible hit-testing is disabled in the current baseline build.");
+        return false;
     }
 
     public static bool TryIsDesktopListViewItemAtPoint(IntPtr hwnd, POINT screenPoint, out bool isOnItem)
@@ -874,21 +825,4 @@ internal static class NativeMethods
 
         return (productVersion, fileVersion);
     }
-}
-
-/// <summary>
-/// Minimal IAccessible COM interface (replaces the Accessibility NuGet package
-/// which depends on WinForms). Only the methods used by PeekDesktop are defined;
-/// all preceding vtable slots are placeholder stubs.
-/// </summary>
-[ComImport]
-[Guid("618736E0-3C3D-11CF-810C-00AA00389B71")]
-[InterfaceType(ComInterfaceType.InterfaceIsIDispatch)]
-internal interface IAccessible
-{
-    [DispId(unchecked((int)0xFFFFEC78))]
-    object? get_accRole(object childID);
-
-    [DispId(unchecked((int)0xFFFFEC76))]
-    string? get_accName(object childID);
 }

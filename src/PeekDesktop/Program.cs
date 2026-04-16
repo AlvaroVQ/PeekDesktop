@@ -17,17 +17,36 @@ public static class Program
         if (!isNewInstance)
             return;
 
-        ConfigureTraceLogging();
-
         try
         {
+            ConfigureTraceLogging();
+            AppDiagnostics.Log("Program starting");
+
             using var messageLoop = new Win32MessageLoop();
+            AppDiagnostics.Log("Message loop created");
 
             // Defer initialization until the message loop is pumping so hooks
             // and SynchronizationContext-like callbacks work correctly.
-            messageLoop.PostDeferredAction(1, () => Initialize(messageLoop));
+            messageLoop.PostDeferredAction(1, () =>
+            {
+                try
+                {
+                    AppDiagnostics.Log("Deferred initialization starting");
+                    Initialize(messageLoop);
+                    AppDiagnostics.Log("Deferred initialization complete");
+                }
+                catch (Exception ex)
+                {
+                    HandleFatalStartupError("Deferred initialization failed", ex);
+                    messageLoop.Quit();
+                }
+            });
 
             messageLoop.Run();
+        }
+        catch (Exception ex)
+        {
+            HandleFatalStartupError("Program startup failed", ex);
         }
         finally
         {
@@ -71,5 +90,32 @@ public static class Program
         Trace.Listeners.Clear();
         Trace.Listeners.Add(new TextWriterTraceListener(logPath));
         Trace.AutoFlush = true;
+    }
+
+    private static void HandleFatalStartupError(string context, Exception ex)
+    {
+        try
+        {
+            string logDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "PeekDesktop");
+            Directory.CreateDirectory(logDir);
+
+            string fatalPath = Path.Combine(logDir, "startup-error.log");
+            File.AppendAllText(
+                fatalPath,
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {context}{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Last-chance logging only.
+        }
+
+        AppDiagnostics.Log($"{context}: {ex}");
+        NativeMethods.MessageBoxW(
+            IntPtr.Zero,
+            $"{context}\n\n{ex.Message}",
+            "PeekDesktop failed to start",
+            NativeMethods.MB_OK | NativeMethods.MB_ICONERROR);
     }
 }
