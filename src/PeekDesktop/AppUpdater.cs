@@ -105,7 +105,23 @@ internal sealed class AppUpdater
     public void OpenLatestReleasePage()
     {
         string url = _latestReleaseUrl ?? ReleasesPageUrl;
+
+        // Validate URL before launching — only allow https://github.com/shanselman/PeekDesktop/
+        if (!IsValidReleaseUrl(url))
+        {
+            AppDiagnostics.Log($"Update URL failed validation, using hardcoded fallback: {url}");
+            url = ReleasesPageUrl;
+        }
+
         NativeMethods.ShellExecuteW(IntPtr.Zero, "open", url, null, null, NativeMethods.SW_SHOWNORMAL);
+    }
+
+    private static bool IsValidReleaseUrl(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
+            && uri.Scheme == "https"
+            && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
+            && uri.AbsolutePath.StartsWith("/shanselman/PeekDesktop/", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RaiseUpdateAvailable(string version, string releaseUrl)

@@ -29,12 +29,12 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         fetch-depth: 0
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
       with:
         dotnet-version: '10.0.x'
 
@@ -49,11 +49,15 @@ jobs:
 
     - name: Set version environment variables
       shell: pwsh
+      env:
+        REF_TYPE: ${{ github.ref_type }}
+        REF_NAME: ${{ github.ref_name }}
+        RUN_NUMBER: ${{ github.run_number }}
       run: |
-        if ('${{ github.ref_type }}' -eq 'tag') {
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+        if ($env:REF_TYPE -eq 'tag') {
+          $version = $env:REF_NAME.TrimStart('v')
         } else {
-          $version = "0.0.0-ci.${{ github.run_number }}"
+          $version = "0.0.0-ci.$env:RUN_NUMBER"
         }
 
         $numericVersion = ($version -split '-', 2)[0]
@@ -106,13 +110,13 @@ jobs:
 
     - name: Azure Login
       if: env.HAS_AZURE_SIGNING == 'true'
-      uses: azure/login@v2
+      uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
       with:
         creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
     - name: Sign executables with Trusted Signing
       if: env.HAS_AZURE_SIGNING == 'true'
-      uses: azure/trusted-signing-action@v1
+      uses: azure/trusted-signing-action@db7a3a6bd3912025c705162fb7475389f5b69ec6 # v1
       with:
         azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -148,7 +152,11 @@ jobs:
     - name: Signing skipped
       if: env.HAS_AZURE_SIGNING != 'true' && env.ALLOW_UNSIGNED == 'true'
       shell: pwsh
-      run: Write-Host "Trusted Signing is not configured for this repo yet; continuing only because this is not a tagged release."
+      run: |
+        if ('${{ github.ref_type }}' -eq 'tag') {
+          throw "Unsigned builds are not allowed for tagged releases. Configure Azure Trusted Signing secrets first."
+        }
+        Write-Host "Trusted Signing is not configured for this repo yet; continuing only because this is not a tagged release."
 
     - name: Prepare artifacts
       shell: pwsh
@@ -170,14 +178,14 @@ jobs:
         Remove-Item "temp-arm64" -Recurse -Force
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: PeekDesktop-Release
         path: artifacts/*.zip
 
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
       with:
         files: artifacts/*.zip
         generate_release_notes: true
