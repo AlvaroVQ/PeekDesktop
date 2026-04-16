@@ -2,7 +2,7 @@
 
 **Click empty desktop wallpaper (or empty taskbar area) to reveal your desktop — just like macOS Sonoma.**
 
-PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. By default it uses Explorer's native **Show Desktop** behavior, and it also includes optional **Classic Minimize** and **Fly Away** peek styles from the tray menu. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
+PeekDesktop brings macOS Sonoma's "click wallpaper to reveal desktop" feature to Windows 10 and 11. By default it uses Explorer's native **Show Desktop** behavior, and it also includes an optional **Fly Away** experimental style plus tray toggles for **Require Double-Click** and **Peek on Taskbar Click**. Click or drag desktop icons normally without accidentally triggering peek. When you're done, click any window, the taskbar, or the wallpaper again and everything comes right back where it was.
 
 <p align="center">
   <img src="img/demo.gif" alt="PeekDesktop demo showing windows minimizing when you click the wallpaper" width="900" />
@@ -43,6 +43,7 @@ PeekDesktop uses lightweight Windows APIs:
 - **`SetWindowsHookEx(WH_MOUSE_LL)`** — low-level mouse hook to detect desktop clicks
 - **`WindowFromPoint`** — identifies the window under your cursor
 - **MSAA hit-testing (`AccessibleObjectFromPoint`)** — distinguishes empty wallpaper from desktop icons
+- **UI Automation hit-testing** — classifies empty taskbar space without firing on Start, pinned apps, or tray buttons
 - **Taskbar Show Desktop button click** — primary path, immune to keyboard remapping (PowerToys, etc.)
 - **Win+D `SendInput`** — fallback if taskbar button is unavailable
 - **`EnumWindows` + `WINDOWPLACEMENT`** — captures exact position and state (including maximized) of every window
@@ -60,15 +61,18 @@ Right-click the tray icon for options:
 - 🖱️ **Require Double-Click** — optionally require a double-click on the desktop to trigger peek
 - 🎮 **Pause While Gaming / Full-Screen** — on by default for exclusive full-screen and known gaming fullscreen apps
 - 📌 **Peek on Taskbar Click** — optionally trigger peek from empty taskbar space
-- 👀 **Peek Style** — switch between Explorer, minimize, and fly-away modes
+- 👀 **Peek Style** — switch between Explorer and fly-away modes
 - ℹ️ **About** — version info
 - ⬇️ **Check for Updates** — see if a newer version is out and open the download page
 - ❌ **Exit** — quit PeekDesktop
 
+When Windows is in dark mode, the tray menu also follows the system theme when supported by the OS.
+
 ## What's New
 
-- **~564 KB binary** (x64 with LZMA) — pure Win32 P/Invoke, no WinForms, no HttpClient, no System.Reflection
+- **Small Native AOT single-file builds** for both x64 and ARM64
 - **Peek on Taskbar Click** — optional trigger from empty taskbar space
+- **Dark tray menu support** — follows Windows dark mode when available
 - **Taskbar button Show Desktop** — bypasses keyboard remappers (PowerToys Keyboard Manager, etc.)
 - **Pause While Gaming / Full-Screen** — avoids interference during gaming sessions
 - **Require Double-Click** — optional double-click trigger for desktop peek
@@ -117,7 +121,7 @@ dotnet publish src/PeekDesktop/PeekDesktop.csproj -c Release -r win-arm64 --self
 
 ### Release packaging
 
-Release builds use **.NET Native AOT** — the exe is a fully native binary with no .NET runtime dependency. The x64 build is further compressed with [PublishAotCompressed](https://github.com/MichalStrehovsky/PublishAotCompressed) (LZMA) for a final download under 600 KB.
+Release builds use **.NET Native AOT** — the exe is a fully native binary with no .NET runtime dependency. Current releases ship as self-contained single-file executables for both x64 and ARM64. Earlier experiments also used [PublishAotCompressed](https://github.com/MichalStrehovsky/PublishAotCompressed) (LZMA), but current builds favor compatibility and predictable startup behavior.
 
 ## Architecture
 
