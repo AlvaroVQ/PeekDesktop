@@ -196,8 +196,8 @@ internal sealed class AppUpdater
             string numericInformational = ExtractNumericPrefix(normalizedInformational);
             string numericAssembly = ExtractNumericPrefix(normalizedAssembly);
 
-            // Fresh local builds inherit the default 1.0.0 version unless CI/tagging stamps them.
-            // Treat that case as a dev build so GitHub releases still show as updates during testing.
+            // If version metadata falls back to the SDK default 1.0.0, treat it as a dev build
+            // so GitHub releases still show as updates during testing.
             rawVersion = numericInformational == "1.0.0" && numericInformational == numericAssembly
                 ? "0.0.0-dev"
                 : informationalVersion;

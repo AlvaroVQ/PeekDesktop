@@ -18,7 +18,12 @@
     <StackTraceSupport>false</StackTraceSupport>
     <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+  </ItemGroup>
 
   <!-- VirtualDesktopService.cs is excluded under AOT because it relies on
        COM interop ([ComImport], Activator.CreateInstance) that NativeAOT

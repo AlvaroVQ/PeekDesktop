@@ -170,8 +170,8 @@ internal sealed class TrayIcon : IDisposable
             "Click your desktop wallpaper to peek at your desktop,\n" +
             "just like macOS Sonoma.\n\n" +
             "Click any window or the taskbar to restore.\n" +
-            "Peek Style lets you switch between classic minimize,\n" +
-            "fly-away, and Explorer show desktop.\n\n" +
+            "Peek Style lets you switch between Explorer show desktop\n" +
+            "and fly-away mode.\n\n" +
             "Updates come from GitHub Releases.\n\n" +
             "github.com/shanselman/PeekDesktop",
             "About PeekDesktop",
@@ -198,7 +198,17 @@ internal sealed class TrayIcon : IDisposable
             return "unknown";
 
         int plusIndex = version.IndexOf('+');
-        return plusIndex >= 0 ? version[..plusIndex] : version;
+        version = plusIndex >= 0 ? version[..plusIndex] : version;
+
+        if (Version.TryParse(version, out var parsed) && parsed.Build >= 0 && parsed.Revision == 0)
+            return $"{parsed.Major}.{parsed.Minor}.{parsed.Build}";
+
+        return version switch
+        {
+            "1.0.0.0" => "dev build",
+            "1.0.0" => "dev build",
+            _ => version
+        };
     }
 
     private static string GetPeekModeDisplayName(PeekMode peekMode)
